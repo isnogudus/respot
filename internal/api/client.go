@@ -14,9 +14,16 @@ import (
 	"time"
 )
 
-// ErrContextTracksUnavailable is returned when the daemon does not serve
-// /context/tracks (older version or metadata.enabled is false).
-var ErrContextTracksUnavailable = errors.New("context track listing unavailable")
+var (
+	// ErrContextTracksUnavailable is returned when the daemon does not serve
+	// /context/tracks (older version or metadata.enabled is false).
+	ErrContextTracksUnavailable = errors.New("context track listing unavailable")
+	// ErrLibraryUnavailable is returned when the daemon does not serve
+	// /library/playlists.
+	ErrLibraryUnavailable = errors.New("library listing unavailable")
+	// ErrNoSession is returned when the daemon has no active Spotify session.
+	ErrNoSession = errors.New("no active Spotify session")
+)
 
 // Track is a track or podcast episode.
 type Track struct {
@@ -77,6 +84,26 @@ type ContextTracks struct {
 func (c *ContextTracks) Complete() bool {
 	return c.Ready && c.Cached >= c.Length
 }
+
+// LibraryPlaylist is a playlist in the user's library.
+type LibraryPlaylist struct {
+	URI           string   `json:"uri"`
+	Name          string   `json:"name"`
+	Description   string   `json:"description"`
+	OwnerUsername string   `json:"owner_username"`
+	Length        int      `json:"length"`
+	ImageURL      *string  `json:"image_url"`
+	Collaborative bool     `json:"collaborative"`
+	Folder        []string `json:"folder"`
+}
+
+type libraryPage struct {
+	Total int               `json:"total"`
+	Items []LibraryPlaylist `json:"items"`
+}
+
+// libraryPageSize is the largest page /library/playlists hands out.
+const libraryPageSize = 500
 
 // Client talks to a go-librespot daemon.
 type Client struct {
@@ -159,6 +186,28 @@ func (c *Client) ContextTracks(ctx context.Context, uri string) (*ContextTracks,
 		return nil, err
 	}
 	return &ct, nil
+}
+
+// LibraryPlaylists lists all playlists in the user's library, in library order.
+func (c *Client) LibraryPlaylists(ctx context.Context) ([]LibraryPlaylist, error) {
+	var all []LibraryPlaylist
+	for {
+		var page libraryPage
+		path := fmt.Sprintf("/library/playlists?offset=%d&limit=%d", len(all), libraryPageSize)
+		code, err := c.do(ctx, http.MethodGet, path, nil, &page)
+		switch {
+		case code == http.StatusNotFound:
+			return nil, ErrLibraryUnavailable
+		case err != nil:
+			return nil, err
+		case code == http.StatusNoContent:
+			return nil, ErrNoSession
+		}
+		all = append(all, page.Items...)
+		if len(page.Items) == 0 || len(all) >= page.Total {
+			return all, nil
+		}
+	}
 }
 
 func (c *Client) PlayPause(ctx context.Context) error { return c.post(ctx, "/player/playpause", nil) }

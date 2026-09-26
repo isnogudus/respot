@@ -21,7 +21,7 @@ func statusPlaying(i int) statusMsg {
 func newListModel(t *testing.T, playing int) Model {
 	t.Helper()
 	m := New(api.New("http://invalid"))
-	m.width, m.height, m.showList = 100, 30, true
+	m.width, m.height, m.pane = 100, 30, paneTracks
 	m = update(m, statusPlaying(playing))
 	ct := &api.ContextTracks{URI: testCtx, Ready: true, Length: 100, Cached: 100}
 	for i := range 100 {

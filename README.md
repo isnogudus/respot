@@ -26,12 +26,24 @@ LIBRESPOT_ADDR=http://pi.local:3678 ./my-spotify-tui
 | `r`            | cycle repeat: off → all → track          |
 | `o`            | play a Spotify URI or open.spotify.com link |
 | `a`            | add a URI or link to the queue           |
-| `l` / `tab`    | toggle the track list of the current context |
-| `j` `k` `g` `G`| navigate the track list                  |
-| `enter` / `e`  | play / enqueue the selected track        |
-| `c`            | jump to the current track and follow it again |
+| `b`            | toggle the library (Liked Songs and playlists) |
+| `l`            | toggle the track list of the current context; in the library, show the selected playlist's tracks |
+| `esc`          | back to the library / close the panel    |
+| `j` `k` `g` `G`| navigate lists                           |
+| `enter`        | play the selected playlist or track      |
+| `e`            | enqueue the selected track               |
+| `c`            | jump to what is playing (and follow it again) |
+| `ctrl+r`       | reload the library                       |
 | `?`            | help                                     |
 | `q`            | quit                                     |
+
+## Library
+
+The library lists Liked Songs and the playlists of your library, including
+followed and Spotify-owned ones, via `GET /library/playlists`. That endpoint is
+not part of upstream go-librespot yet; it needs a build of the
+`feature/library-playlists` branch. With other daemons the library panel shows a
+hint and everything else keeps working.
 
 ## Track list
 

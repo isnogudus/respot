@@ -42,6 +42,19 @@ type (
 		ct  *api.ContextTracks
 		err error
 	}
+	libraryMsg struct {
+		playlists []api.LibraryPlaylist
+		err       error
+	}
+)
+
+// pane is the panel shown below the now-playing box.
+type pane int
+
+const (
+	paneNone pane = iota
+	paneLibrary
+	paneTracks
 )
 
 type inputMode int
@@ -71,14 +84,27 @@ type Model struct {
 	width, height int
 	showHelp      bool
 
-	showList  bool
-	listURI   string
-	list      *api.ContextTracks
-	listErr   error
-	cursor    int
-	offset    int
-	followURI string // playing track the cursor was last moved to automatically
-	navigated bool   // user moved the cursor since the list was loaded
+	pane pane
+
+	// Track list pane. It shows the playing context, or the context picked
+	// in the library while browseURI is set.
+	browseURI  string
+	browseName string
+	listURI    string
+	list       *api.ContextTracks
+	listErr    error
+	cursor     int
+	offset     int
+	followURI  string // playing track the cursor was last moved to automatically
+	navigated  bool   // user moved the cursor since the list was loaded
+
+	// Library pane.
+	library    []api.LibraryPlaylist
+	libLoaded  bool
+	libLoading bool
+	libErr     error
+	libCursor  int
+	libOffset  int
 
 	mode  inputMode
 	input textinput.Model
@@ -119,6 +145,15 @@ func (m Model) fetchList(uri string) tea.Cmd {
 		defer cancel()
 		ct, err := m.client.ContextTracks(ctx, uri)
 		return listMsg{uri: uri, ct: ct, err: err}
+	}
+}
+
+func (m Model) fetchLibrary() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		defer cancel()
+		pl, err := m.client.LibraryPlaylists(ctx)
+		return libraryMsg{playlists: pl, err: err}
 	}
 }
 
@@ -210,7 +245,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.list, m.listErr = msg.ct, msg.err
 		if msg.ct != nil {
 			m.followCursor(false)
-			if !msg.ct.Complete() && m.showList {
+			if !msg.ct.Complete() && m.pane == paneTracks {
 				uri := msg.uri
 				return m, tea.Tick(listPollInterval, func(time.Time) tea.Msg { return listPollMsg{uri: uri} })
 			}
@@ -218,8 +253,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case listPollMsg:
-		if m.showList && msg.uri == m.listURI {
+		if m.pane == paneTracks && msg.uri == m.listURI {
 			return m, m.fetchList(msg.uri)
+		}
+		return m, nil
+
+	case libraryMsg:
+		m.libLoading = false
+		m.libErr = msg.err
+		if msg.err == nil {
+			m.library, m.libLoaded = msg.playlists, true
+			m.libCursor = max(0, min(m.libCursor, len(m.libraryEntries())-1))
 		}
 		return m, nil
 
@@ -232,12 +276,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// syncList (re)loads the track list when it is visible and the context changed.
+// tracksURI is the context the track list pane shows.
+func (m Model) tracksURI() string {
+	if m.browseURI != "" {
+		return m.browseURI
+	}
+	return m.contextURI()
+}
+
+// syncList (re)loads the track list when it is visible and its context changed.
 func (m *Model) syncList(force bool) tea.Cmd {
-	if !m.showList {
+	if m.pane != paneTracks {
 		return nil
 	}
-	uri := m.contextURI()
+	uri := m.tracksURI()
 	if uri == m.listURI && !force {
 		return nil
 	}
@@ -253,7 +305,7 @@ func (m *Model) syncList(force bool) tea.Cmd {
 // the user moves the cursor away and resumes when force is set or the cursor
 // is back on the followed track.
 func (m *Model) followCursor(force bool) {
-	if m.list == nil || m.cursor >= len(m.list.Tracks) {
+	if m.list == nil || m.cursor >= len(m.list.Tracks) || m.listURI != m.contextURI() {
 		return
 	}
 	onFollowed := m.followURI != "" && m.list.Tracks[m.cursor].URI == m.followURI
@@ -266,10 +318,7 @@ func (m *Model) followCursor(force bool) {
 			continue
 		}
 		m.cursor, m.followURI = i, cur
-		rows := m.listHeight()
-		if m.cursor < m.offset || m.cursor >= m.offset+rows {
-			m.offset = max(0, m.cursor-rows/2)
-		}
+		centerOn(m.cursor, &m.offset, m.listHeight())
 		return
 	}
 }
@@ -311,39 +360,92 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.startInput(inputPlay)
 	case "a":
 		return m.startInput(inputQueue)
-	case "tab", "l":
-		m.showList = !m.showList
-		if m.showList {
-			return m, m.syncList(true)
+	case "b":
+		if m.pane == paneLibrary {
+			m.pane = paneNone
+			return m, nil
 		}
+		return m.openLibrary()
+	case "l":
+		switch m.pane {
+		case paneLibrary:
+			return m.browseSelected()
+		case paneTracks:
+			m.pane, m.browseURI, m.browseName = paneNone, "", ""
+			return m, nil
+		}
+		m.pane, m.browseURI, m.browseName = paneTracks, "", ""
+		return m, m.syncList(true)
+	case "esc":
+		if m.pane == paneTracks && m.browseURI != "" {
+			m.pane, m.browseURI, m.browseName = paneLibrary, "", ""
+			return m, nil
+		}
+		m.pane = paneNone
 		return m, nil
 	}
 
-	if m.showList {
+	switch m.pane {
+	case paneTracks:
 		return m.handleListKey(msg)
+	case paneLibrary:
+		return m.handleLibraryKey(msg)
 	}
 	return m, nil
+}
+
+// navigate moves a list cursor for the common movement keys and reports
+// whether the key was one of them.
+func navigate(key string, cursor, offset *int, n, rows int) bool {
+	page := max(1, rows-1)
+	switch key {
+	case "up", "k":
+		*cursor--
+	case "down", "j":
+		*cursor++
+	case "pgup", "ctrl+u":
+		*cursor -= page
+	case "pgdown", "ctrl+d":
+		*cursor += page
+	case "home", "g":
+		*cursor = 0
+	case "end", "G":
+		*cursor = n - 1
+	default:
+		return false
+	}
+	*cursor = max(0, min(*cursor, n-1))
+	scrollTo(*cursor, offset, rows)
+	return true
+}
+
+// scrollTo moves offset the least needed to keep cursor within rows.
+func scrollTo(cursor int, offset *int, rows int) {
+	if cursor < *offset {
+		*offset = cursor
+	}
+	if cursor >= *offset+rows {
+		*offset = cursor - rows + 1
+	}
+	*offset = max(0, *offset)
+}
+
+// centerOn puts cursor in the middle of the view unless it is already visible.
+func centerOn(cursor int, offset *int, rows int) {
+	if cursor < *offset || cursor >= *offset+rows {
+		*offset = max(0, cursor-rows/2)
+	}
 }
 
 func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.list == nil || len(m.list.Tracks) == 0 {
 		return m, nil
 	}
-	n := len(m.list.Tracks)
-	page := max(1, m.listHeight()-1)
+	if navigate(msg.String(), &m.cursor, &m.offset, len(m.list.Tracks), m.listHeight()) {
+		m.navigated = true
+		return m, nil
+	}
 	switch msg.String() {
-	case "up", "k":
-		m.cursor--
-	case "down", "j":
-		m.cursor++
-	case "pgup", "ctrl+u":
-		m.cursor -= page
-	case "pgdown", "ctrl+d":
-		m.cursor += page
-	case "home", "g":
-		m.cursor = 0
-	case "end", "G":
-		m.cursor = n - 1
 	case "c":
 		m.followCursor(true)
 		return m, nil
@@ -356,9 +458,6 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.note, m.noteAt = "Queued: "+trackTitle(it), time.Now()
 		return m, m.action(func(ctx context.Context) error { return m.client.AddToQueue(ctx, it.URI) })
 	}
-	m.navigated = true
-	m.cursor = max(0, min(m.cursor, n-1))
-	m.clampOffset(m.listHeight())
 	return m, nil
 }
 

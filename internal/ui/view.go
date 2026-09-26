@@ -36,8 +36,11 @@ func (m Model) View() string {
 	}
 	top := m.renderTop()
 	parts := []string{top}
-	if m.showList {
+	switch m.pane {
+	case paneTracks:
 		parts = append(parts, m.renderList(m.listHeightFor(top)))
+	case paneLibrary:
+		parts = append(parts, m.renderLibrary(m.listHeightFor(top)))
 	}
 	view := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
@@ -77,7 +80,7 @@ func (m Model) renderTop() string {
 	}
 
 	lines := []string{m.renderHeader(w), boxStyle.Width(w - 2).Render(body)}
-	if m.status != nil && m.status.NextTrack != nil && !m.showList {
+	if m.status != nil && m.status.NextTrack != nil && m.pane == paneNone {
 		nt := m.status.NextTrack
 		lines = append(lines, ansi.Truncate(
 			" "+subtleStyle.Render("Up next  ")+nt.Name+mutedStyle.Render(" — "+strings.Join(nt.ArtistNames, ", ")),
@@ -200,20 +203,13 @@ func (m Model) listHeightFor(top string) int {
 	return max(3, m.height-lipgloss.Height(top)-lipgloss.Height(m.renderFooter())-2)
 }
 
-func (m *Model) clampOffset(rows int) {
-	if m.cursor < m.offset {
-		m.offset = m.cursor
-	}
-	if m.cursor >= m.offset+rows {
-		m.offset = m.cursor - rows + 1
-	}
-	m.offset = max(0, m.offset)
-}
-
 func (m Model) renderList(rows int) string {
 	w := m.contentWidth()
 	header := " " + titleStyle.Render("Tracks")
-	if m.status != nil && m.status.ContextName != nil {
+	switch {
+	case m.browseName != "":
+		header += mutedStyle.Render(" · "+m.browseName) + subtleStyle.Render("  (esc back to library)")
+	case m.status != nil && m.status.ContextName != nil:
 		header += mutedStyle.Render(" · " + *m.status.ContextName)
 	}
 
@@ -240,7 +236,7 @@ func (m Model) renderList(rows int) string {
 }
 
 func (m Model) renderRows(rows, w int) []string {
-	m.clampOffset(rows)
+	scrollTo(m.cursor, &m.offset, rows)
 	cur := m.currentURI()
 	tracks := m.list.Tracks
 	numW := len(fmt.Sprint(len(tracks)))
@@ -290,7 +286,7 @@ func (m Model) renderFooter() string {
 	case m.note != "":
 		return ansi.Truncate(accentStyle.Render(" ✓ "+m.note), w, "…")
 	}
-	keys := [][2]string{{"space", "play/pause"}, {"n/p", "next/prev"}, {"←/→", "seek"}, {"+/-", "vol"}, {"l", "tracks"}, {"?", "help"}, {"q", "quit"}}
+	keys := [][2]string{{"space", "play/pause"}, {"n/p", "next/prev"}, {"←/→", "seek"}, {"+/-", "vol"}, {"b", "library"}, {"l", "tracks"}, {"?", "help"}, {"q", "quit"}}
 	var parts []string
 	for _, k := range keys {
 		parts = append(parts, keyStyle.Render(k[0])+" "+subtleStyle.Render(k[1]))
@@ -308,10 +304,15 @@ func (m Model) renderHelp(w int) string {
 		{"r", "cycle repeat: off → all → track"},
 		{"o", "play a Spotify URI or link"},
 		{"a", "add a URI or link to the queue"},
-		{"l / tab", "toggle track list of current context"},
-		{"j k g G", "move in track list (pgup/pgdn too)"},
-		{"enter  e", "play / enqueue selected track"},
-		{"c", "jump to current track, follow it again"},
+		{"b", "toggle library (Liked Songs and playlists)"},
+		{"l", "toggle track list of current context"},
+		{"j k g G", "move in lists (pgup/pgdn too)"},
+		{"enter", "play selected playlist or track"},
+		{"l", "in library: show tracks of selected playlist"},
+		{"esc", "back to library / close panel"},
+		{"e", "enqueue selected track"},
+		{"c", "jump to what is playing"},
+		{"ctrl+r", "reload library"},
 		{"q", "quit"},
 	}
 	var b strings.Builder
