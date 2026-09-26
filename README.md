@@ -32,6 +32,7 @@ LIBRESPOT_ADDR=http://pi.local:3678 ./my-spotify-tui
 | `j` `k` `g` `G`| navigate lists                           |
 | `enter`        | in the library, open the selected playlist; in a track list, play the selected track |
 | `P`            | play the selected playlist from the library |
+| `/`            | filter the library by name or folder; `enter` keeps the filter, `esc` clears it |
 | `e`            | enqueue the selected track               |
 | `c`            | jump to what is playing (and follow it again) |
 | `ctrl+r`       | reload the library                       |

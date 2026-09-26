@@ -30,9 +30,37 @@ func likedSongsURI(username string) string {
 	return "spotify:user:" + username + ":collection"
 }
 
-// libraryEntries lists Liked Songs followed by the library playlists. Liked
-// Songs needs the username, so it only appears once the status is known.
+// libraryEntries is what the library pane shows: all entries, narrowed by
+// the filter when one is set.
 func (m Model) libraryEntries() []libraryEntry {
+	all := m.allLibraryEntries()
+	if m.libFilter == "" {
+		return all
+	}
+	var out []libraryEntry
+	for _, e := range all {
+		if e.matches(m.libFilter) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// matches reports whether every word of filter occurs, ignoring case, in the
+// entry's name or folder path.
+func (e libraryEntry) matches(filter string) bool {
+	hay := strings.ToLower(e.name + " " + strings.Join(e.folder, " "))
+	for _, word := range strings.Fields(strings.ToLower(filter)) {
+		if !strings.Contains(hay, word) {
+			return false
+		}
+	}
+	return true
+}
+
+// allLibraryEntries lists Liked Songs followed by the library playlists. Liked
+// Songs needs the username, so it only appears once the status is known.
+func (m Model) allLibraryEntries() []libraryEntry {
 	var out []libraryEntry
 	if m.status != nil && m.status.Username != "" {
 		out = append(out, libraryEntry{uri: likedSongsURI(m.status.Username), name: likedSongsName, length: -1, liked: true})
@@ -81,6 +109,14 @@ func (m Model) handleLibraryKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch msg.String() {
+	case "/":
+		return m.startInput(inputFilter)
+	case "esc":
+		if m.libFilter != "" {
+			m.libFilter, m.libCursor, m.libOffset = "", 0, 0
+			return m, nil
+		}
+		m.pane = paneNone
 	case "ctrl+r":
 		return m.reloadLibrary()
 	case "c":
@@ -105,14 +141,44 @@ func (m Model) handleLibraryKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// updateFilterInput narrows the library while the filter is typed. Enter
+// keeps the filter and returns to the list, esc drops it.
+func (m Model) updateFilterInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "ctrl+c":
+		m.mode, m.libFilter = inputNone, ""
+		m.input.Blur()
+		m.libCursor, m.libOffset = 0, 0
+		return m, nil
+	case "enter", "down", "up":
+		m.mode = inputNone
+		m.input.Blur()
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.input, cmd = m.input.Update(msg)
+	if v := m.input.Value(); v != m.libFilter {
+		m.libFilter, m.libCursor, m.libOffset = v, 0, 0
+	}
+	return m, cmd
+}
+
 func (m Model) renderLibrary(rows int) string {
 	w := m.contentWidth()
 	header := " " + titleStyle.Render("Library")
-	if m.libLoaded {
+	switch {
+	case m.libLoaded && m.libFilter != "":
+		header += mutedStyle.Render(fmt.Sprintf(" · %d of %d", len(m.libraryEntries()), len(m.allLibraryEntries()))) +
+			accentStyle.Render("  /"+m.libFilter)
+	case m.libLoaded:
 		header += mutedStyle.Render(fmt.Sprintf(" · %d playlists", len(m.library)))
 	}
 
-	header = paneHeader(header, "enter open · P play · esc close", w)
+	hints := "/ filter · enter open · P play · esc close"
+	if m.libFilter != "" {
+		hints = "/ filter · enter open · P play · esc clear"
+	}
+	header = paneHeader(header, hints, w)
 
 	switch {
 	case m.libErr != nil && errors.Is(m.libErr, api.ErrLibraryUnavailable):
@@ -126,6 +192,9 @@ func (m Model) renderLibrary(rows int) string {
 	}
 
 	entries := m.libraryEntries()
+	if len(entries) == 0 {
+		return header + "\n" + subtleStyle.Render(" No playlist matches.")
+	}
 	scrollTo(m.libCursor, &m.libOffset, rows)
 	cur := m.contextURI()
 	lines := []string{header}

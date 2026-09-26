@@ -337,6 +337,7 @@ func (m Model) renderHelp(w int) string {
 		{"j k g G", "move in lists (pgup/pgdn too)"},
 		{"enter", "library: open playlist · tracks: play track"},
 		{"P", "play selected playlist from the library"},
+		{"/", "filter the library (esc clears)"},
 		{"esc", "back to library / close panel"},
 		{"e", "enqueue selected track"},
 		{"c", "jump to what is playing"},

@@ -63,6 +63,7 @@ const (
 	inputNone inputMode = iota
 	inputPlay
 	inputQueue
+	inputFilter
 )
 
 // Model is the root UI model.
@@ -105,6 +106,7 @@ type Model struct {
 	libErr     error
 	libCursor  int
 	libOffset  int
+	libFilter  string
 
 	mode  inputMode
 	input textinput.Model
@@ -381,6 +383,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.pane, m.browseURI, m.browseName = paneLibrary, "", ""
 			return m, nil
 		}
+		if m.pane == paneLibrary {
+			return m.handleLibraryKey(msg) // clears the filter first
+		}
 		m.pane = paneNone
 		return m, nil
 	}
@@ -491,15 +496,25 @@ func (m Model) cycleRepeat(st *api.Status) func(context.Context) error {
 func (m Model) startInput(mode inputMode) (tea.Model, tea.Cmd) {
 	m.mode = mode
 	m.input.SetValue("")
-	if mode == inputPlay {
+	m.input.Placeholder = "spotify:… or https://open.spotify.com/…"
+	switch mode {
+	case inputPlay:
 		m.input.Prompt = "Play URI: "
-	} else {
+	case inputQueue:
 		m.input.Prompt = "Queue URI: "
+	case inputFilter:
+		m.input.Prompt = "/"
+		m.input.Placeholder = "filter playlists"
+		m.input.SetValue(m.libFilter)
+		m.input.CursorEnd()
 	}
 	return m, m.input.Focus()
 }
 
 func (m Model) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.mode == inputFilter {
+		return m.updateFilterInput(msg)
+	}
 	switch msg.String() {
 	case "esc", "ctrl+c":
 		m.mode = inputNone
