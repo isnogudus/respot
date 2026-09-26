@@ -65,7 +65,7 @@ func (m Model) selectedEntry() (libraryEntry, bool) {
 }
 
 // browseSelected opens the track list of the selected library entry without
-// playing it.
+// playing it; P plays the entry instead.
 func (m Model) browseSelected() (tea.Model, tea.Cmd) {
 	e, ok := m.selectedEntry()
 	if !ok {
@@ -93,6 +93,8 @@ func (m Model) handleLibraryKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case "enter":
+		return m.browseSelected()
+	case "P":
 		e, ok := m.selectedEntry()
 		if !ok {
 			return m, nil
@@ -109,6 +111,8 @@ func (m Model) renderLibrary(rows int) string {
 	if m.libLoaded {
 		header += mutedStyle.Render(fmt.Sprintf(" · %d playlists", len(m.library)))
 	}
+
+	header = paneHeader(header, "enter open · P play · esc close", w)
 
 	switch {
 	case m.libErr != nil && errors.Is(m.libErr, api.ErrLibraryUnavailable):

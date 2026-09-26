@@ -83,3 +83,15 @@ func TestLibraryKeyTogglesPane(t *testing.T) {
 		t.Fatalf("reopening a loaded library must not refetch (pane=%d, cmd=%v)", m.pane, cmd != nil)
 	}
 }
+
+func TestLibraryEnterOpensPlaylist(t *testing.T) {
+	m := newLibraryModel(t)
+	m = update(m, key("j"))
+	m = update(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.pane != paneTracks || m.browseURI != "spotify:playlist:a" {
+		t.Fatalf("enter: pane=%d browse=%q, want the track list of playlist A", m.pane, m.browseURI)
+	}
+	if m.note != "" {
+		t.Fatalf("enter must not start playback, got note %q", m.note)
+	}
+}

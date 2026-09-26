@@ -42,15 +42,22 @@ func (m Model) View() string {
 	case paneLibrary:
 		parts = append(parts, m.renderLibrary(m.listHeightFor(top)))
 	}
-	view := lipgloss.JoinVertical(lipgloss.Left, parts...)
+	body := strings.Split(lipgloss.JoinVertical(lipgloss.Left, parts...), "\n")
 
-	footer := m.renderFooter()
-	gap := m.height - lipgloss.Height(view) - lipgloss.Height(footer)
-	if gap > 0 {
-		view += strings.Repeat("\n", gap)
+	// The body gets whatever the footer leaves, so the footer always sits on
+	// the last lines of the screen.
+	bodyHeight := max(0, m.height-footerHeight)
+	if len(body) > bodyHeight {
+		body = body[:bodyHeight]
 	}
-	return view + "\n" + footer
+	for len(body) < bodyHeight {
+		body = append(body, "")
+	}
+	return strings.Join(body, "\n") + "\n" + m.renderMessageLine() + "\n" + m.renderKeyLine()
 }
+
+// footerHeight is the message line plus the key line.
+const footerHeight = 2
 
 func (m Model) contentWidth() int { return min(m.width, maxWidth) }
 
@@ -200,15 +207,18 @@ func audioInfo(t *api.Track) string {
 func (m Model) listHeight() int { return m.listHeightFor(m.renderTop()) }
 
 func (m Model) listHeightFor(top string) int {
-	return max(3, m.height-lipgloss.Height(top)-lipgloss.Height(m.renderFooter())-2)
+	// One line goes to the pane header.
+	return max(3, m.height-lipgloss.Height(top)-footerHeight-1)
 }
 
 func (m Model) renderList(rows int) string {
 	w := m.contentWidth()
 	header := " " + titleStyle.Render("Tracks")
+	hints := "enter play · e queue · esc close"
 	switch {
 	case m.browseName != "":
-		header += mutedStyle.Render(" · "+m.browseName) + subtleStyle.Render("  (esc back to library)")
+		header += mutedStyle.Render(" · " + m.browseName)
+		hints = "enter play · e queue · esc library"
 	case m.status != nil && m.status.ContextName != nil:
 		header += mutedStyle.Render(" · " + *m.status.ContextName)
 	}
@@ -232,7 +242,7 @@ func (m Model) renderList(rows int) string {
 		}
 		body = m.renderRows(rows, w)
 	}
-	return header + "\n" + strings.Join(body, "\n")
+	return paneHeader(header, hints, w) + "\n" + strings.Join(body, "\n")
 }
 
 func (m Model) renderRows(rows, w int) []string {
@@ -269,6 +279,16 @@ func (m Model) renderRows(rows, w int) []string {
 	return out
 }
 
+// paneHeader right-aligns the pane's key hints next to its title, dropping
+// them when the line is too narrow.
+func paneHeader(title, hints string, w int) string {
+	pad := w - lipgloss.Width(title) - lipgloss.Width(hints) - 1
+	if pad < 2 {
+		return ansi.Truncate(title, w, "…")
+	}
+	return title + strings.Repeat(" ", pad) + subtleStyle.Render(hints)
+}
+
 func trackTitle(it api.ContextTrackItem) string {
 	if it.Track == nil {
 		return it.URI
@@ -276,7 +296,9 @@ func trackTitle(it api.ContextTrackItem) string {
 	return it.Track.Name + " — " + strings.Join(it.Track.ArtistNames, ", ")
 }
 
-func (m Model) renderFooter() string {
+// renderMessageLine shows the URI prompt, the last error or a note; it is
+// blank otherwise.
+func (m Model) renderMessageLine() string {
 	w := m.contentWidth()
 	switch {
 	case m.mode != inputNone:
@@ -286,6 +308,12 @@ func (m Model) renderFooter() string {
 	case m.note != "":
 		return ansi.Truncate(accentStyle.Render(" ✓ "+m.note), w, "…")
 	}
+	return ""
+}
+
+// renderKeyLine is the always-visible line of global keys.
+func (m Model) renderKeyLine() string {
+	w := m.contentWidth()
 	keys := [][2]string{{"space", "play/pause"}, {"n/p", "next/prev"}, {"←/→", "seek"}, {"+/-", "vol"}, {"b", "library"}, {"l", "tracks"}, {"?", "help"}, {"q", "quit"}}
 	var parts []string
 	for _, k := range keys {
@@ -307,8 +335,8 @@ func (m Model) renderHelp(w int) string {
 		{"b", "toggle library (Liked Songs and playlists)"},
 		{"l", "toggle track list of current context"},
 		{"j k g G", "move in lists (pgup/pgdn too)"},
-		{"enter", "play selected playlist or track"},
-		{"l", "in library: show tracks of selected playlist"},
+		{"enter", "library: open playlist · tracks: play track"},
+		{"P", "play selected playlist from the library"},
 		{"esc", "back to library / close panel"},
 		{"e", "enqueue selected track"},
 		{"c", "jump to what is playing"},

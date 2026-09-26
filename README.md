@@ -30,7 +30,8 @@ LIBRESPOT_ADDR=http://pi.local:3678 ./my-spotify-tui
 | `l`            | toggle the track list of the current context; in the library, show the selected playlist's tracks |
 | `esc`          | back to the library / close the panel    |
 | `j` `k` `g` `G`| navigate lists                           |
-| `enter`        | play the selected playlist or track      |
+| `enter`        | in the library, open the selected playlist; in a track list, play the selected track |
+| `P`            | play the selected playlist from the library |
 | `e`            | enqueue the selected track               |
 | `c`            | jump to what is playing (and follow it again) |
 | `ctrl+r`       | reload the library                       |
