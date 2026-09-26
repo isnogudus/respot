@@ -18,9 +18,13 @@ const (
 	pollInterval     = 2 * time.Second
 	tickInterval     = 250 * time.Millisecond
 	listPollInterval = time.Second
-	seekStepMs       = 10_000
-	errorTTL         = 6 * time.Second
-	requestTimeout   = 5 * time.Second
+	// listMaxStalls is how many polls in a row may bring no newly resolved
+	// tracks before the list stops polling; a daemon whose cache cannot hold
+	// the whole list would otherwise be asked forever.
+	listMaxStalls  = 15
+	seekStepMs     = 10_000
+	errorTTL       = 6 * time.Second
+	requestTimeout = 5 * time.Second
 )
 
 type (
@@ -96,6 +100,7 @@ type Model struct {
 	listErr    error
 	cursor     int
 	offset     int
+	listStalls int    // polls in a row without newly resolved tracks
 	followURI  string // playing track the cursor was last moved to automatically
 	navigated  bool   // user moved the cursor since the list was loaded
 
@@ -246,10 +251,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.uri != m.listURI {
 			return m, nil
 		}
+		if msg.ct != nil && msg.ct.Ready && m.list != nil && m.list.Ready && msg.ct.Cached <= m.list.Cached {
+			m.listStalls++
+		} else {
+			m.listStalls = 0
+		}
 		m.list, m.listErr = msg.ct, msg.err
 		if msg.ct != nil {
 			m.followCursor(false)
-			if !msg.ct.Complete() && m.pane == paneTracks {
+			if !msg.ct.Complete() && m.pane == paneTracks && m.listStalls < listMaxStalls {
 				uri := msg.uri
 				return m, tea.Tick(listPollInterval, func(time.Time) tea.Msg { return listPollMsg{uri: uri} })
 			}
@@ -308,7 +318,7 @@ func (m *Model) syncList(force bool) tea.Cmd {
 	if uri == m.listURI && !force {
 		return nil
 	}
-	m.listURI, m.list, m.listErr = uri, nil, nil
+	m.listURI, m.list, m.listErr, m.listStalls = uri, nil, nil, 0
 	m.cursor, m.offset, m.followURI, m.navigated = 0, 0, "", false
 	if uri == "" {
 		return nil

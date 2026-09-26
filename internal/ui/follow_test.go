@@ -81,3 +81,24 @@ func TestCursorFollowsAfterEnter(t *testing.T) {
 		t.Fatalf("cursor = %d, want 16", m.cursor)
 	}
 }
+
+func TestListStopsPollingWithoutProgress(t *testing.T) {
+	m := newListModel(t, 10)
+	partial := &api.ContextTracks{URI: testCtx, Ready: true, Length: 100, Cached: 90, Tracks: m.list.Tracks}
+
+	var cmd tea.Cmd
+	for i := 0; i < listMaxStalls; i++ {
+		var nm tea.Model
+		nm, cmd = m.Update(listMsg{uri: testCtx, ct: partial})
+		m = nm.(Model)
+	}
+	if cmd != nil {
+		t.Fatalf("still polling after %d polls without progress", listMaxStalls)
+	}
+
+	progressed := *partial
+	progressed.Cached = 95
+	if _, cmd = m.Update(listMsg{uri: testCtx, ct: &progressed}); cmd == nil {
+		t.Fatalf("progress must resume polling")
+	}
+}
