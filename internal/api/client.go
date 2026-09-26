@@ -21,6 +21,9 @@ var (
 	// ErrLibraryUnavailable is returned when the daemon does not serve
 	// /library/playlists.
 	ErrLibraryUnavailable = errors.New("library listing unavailable")
+	// ErrLibraryWriteUnavailable is returned when the daemon cannot write to
+	// Liked Songs or playlists.
+	ErrLibraryWriteUnavailable = errors.New("daemon cannot write to the library")
 	// ErrNoSession is returned when the daemon has no active Spotify session.
 	ErrNoSession = errors.New("no active Spotify session")
 )
@@ -94,6 +97,7 @@ type LibraryPlaylist struct {
 	Length        int      `json:"length"`
 	ImageURL      *string  `json:"image_url"`
 	Collaborative bool     `json:"collaborative"`
+	CanEdit       bool     `json:"can_edit"`
 	Folder        []string `json:"folder"`
 }
 
@@ -208,6 +212,29 @@ func (c *Client) LibraryPlaylists(ctx context.Context) ([]LibraryPlaylist, error
 			return all, nil
 		}
 	}
+}
+
+// SetLiked saves uris to, or removes them from, Liked Songs.
+func (c *Client) SetLiked(ctx context.Context, uris []string, liked bool) error {
+	return c.libraryWrite(ctx, "/library/liked", map[string]any{"uris": uris, "liked": liked})
+}
+
+// AddToPlaylist appends uris to the end of a playlist.
+func (c *Client) AddToPlaylist(ctx context.Context, playlistURI string, uris []string) error {
+	return c.libraryWrite(ctx, "/library/playlists/add_tracks", map[string]any{"playlist_uri": playlistURI, "uris": uris})
+}
+
+func (c *Client) libraryWrite(ctx context.Context, path string, body any) error {
+	code, err := c.do(ctx, http.MethodPost, path, body, nil)
+	switch {
+	case code == http.StatusNotFound:
+		return ErrLibraryWriteUnavailable
+	case err != nil:
+		return err
+	case code == http.StatusNoContent:
+		return ErrNoSession
+	}
+	return nil
 }
 
 func (c *Client) PlayPause(ctx context.Context) error { return c.post(ctx, "/player/playpause", nil) }

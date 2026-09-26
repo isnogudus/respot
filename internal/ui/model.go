@@ -108,6 +108,8 @@ type Model struct {
 	libOffset  int
 	libFilter  string
 
+	popup *addPopup
+
 	mode  inputMode
 	input textinput.Model
 }
@@ -269,9 +271,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case libraryWriteMsg:
+		if msg.err != nil {
+			m.setErr(msg.err)
+		} else {
+			m.note, m.noteAt = msg.note, time.Now()
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		if m.mode != inputNone {
 			return m.updateInput(msg)
+		}
+		if m.popup != nil {
+			return m.handlePopupKey(msg)
 		}
 		return m.handleKey(msg)
 	}
@@ -358,6 +371,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, m.action(m.cycleRepeat(st))
+	case "A":
+		return m.openAddPopup()
+	case "f":
+		return m.likeTarget()
 	case "o":
 		return m.startInput(inputPlay)
 	case "a":

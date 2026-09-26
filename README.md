@@ -24,6 +24,8 @@ LIBRESPOT_ADDR=http://pi.local:3678 ./my-spotify-tui
 | `+` / `-`      | volume ±5 %                              |
 | `s`            | toggle shuffle                           |
 | `r`            | cycle repeat: off → all → track          |
+| `A`            | add the selected (or playing) track to Liked Songs or one of your playlists |
+| `f`            | add the selected (or playing) track to Liked Songs |
 | `o`            | play a Spotify URI or open.spotify.com link |
 | `a`            | add a URI or link to the queue           |
 | `b`            | toggle the library (Liked Songs and playlists) |
@@ -46,6 +48,10 @@ followed and Spotify-owned ones, via `GET /library/playlists`. That endpoint is
 not part of upstream go-librespot yet; it needs a build of the
 `feature/library-playlists` branch. With other daemons the library panel shows a
 hint and everything else keeps working.
+
+Adding tracks uses `POST /library/liked` and `POST /library/playlists/add_tracks`
+from the `feature/library-write` branch; the popup offers only playlists you may
+edit.
 
 ## Track list
 

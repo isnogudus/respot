@@ -53,6 +53,12 @@ func (m Model) View() string {
 	for len(body) < bodyHeight {
 		body = append(body, "")
 	}
+	if m.popup != nil {
+		popup := m.renderPopup()
+		x := max(0, (m.contentWidth()-lipgloss.Width(popup))/2)
+		y := max(0, (bodyHeight-lipgloss.Height(popup))/2)
+		body = overlay(body, popup, x, y)
+	}
 	return strings.Join(body, "\n") + "\n" + m.renderMessageLine() + "\n" + m.renderKeyLine()
 }
 
@@ -314,7 +320,7 @@ func (m Model) renderMessageLine() string {
 // renderKeyLine is the always-visible line of global keys.
 func (m Model) renderKeyLine() string {
 	w := m.contentWidth()
-	keys := [][2]string{{"space", "play/pause"}, {"n/p", "next/prev"}, {"←/→", "seek"}, {"+/-", "vol"}, {"b", "library"}, {"l", "tracks"}, {"?", "help"}, {"q", "quit"}}
+	keys := [][2]string{{"space", "play/pause"}, {"n/p", "next/prev"}, {"←/→", "seek"}, {"+/-", "vol"}, {"b", "library"}, {"l", "tracks"}, {"A", "add to"}, {"?", "help"}, {"q", "quit"}}
 	var parts []string
 	for _, k := range keys {
 		parts = append(parts, keyStyle.Render(k[0])+" "+subtleStyle.Render(k[1]))
@@ -330,6 +336,8 @@ func (m Model) renderHelp(w int) string {
 		{"+  -", "volume ±5 %"},
 		{"s", "toggle shuffle"},
 		{"r", "cycle repeat: off → all → track"},
+		{"A", "add track to Liked Songs or a playlist"},
+		{"f", "add track to Liked Songs"},
 		{"o", "play a Spotify URI or link"},
 		{"a", "add a URI or link to the queue"},
 		{"b", "toggle library (Liked Songs and playlists)"},
