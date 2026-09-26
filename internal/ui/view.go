@@ -130,7 +130,11 @@ func (m Model) renderNowPlaying(inner int) string {
 	trunc := func(s string) string { return ansi.Truncate(s, inner, "…") }
 
 	var b strings.Builder
-	b.WriteString(trunc(titleStyle.Render(t.Name)) + "\n")
+	title := titleStyle.Render(t.Name)
+	if liked, _ := m.likedState(t.URI); liked {
+		title += accentStyle.Render(" ♥")
+	}
+	b.WriteString(trunc(title) + "\n")
 	b.WriteString(trunc(accentStyle.Render(strings.Join(t.ArtistNames, ", "))) + "\n")
 
 	album := t.AlbumName
@@ -273,9 +277,14 @@ func (m Model) renderRows(rows, w int) []string {
 		if it.URI == cur {
 			title = accentStyle.Render(title)
 		}
-		avail := w - 2 - lipgloss.Width(mark) - lipgloss.Width(num) - len(dur) - 2
+		heart := "  "
+		if liked, _ := m.likedState(it.URI); liked {
+			heart = accentStyle.Render("♥ ")
+		}
+		dur = heart + dur
+		avail := w - 2 - lipgloss.Width(mark) - lipgloss.Width(num) - lipgloss.Width(dur) - 2
 		title = ansi.Truncate(title, max(5, avail), "…")
-		pad := max(1, w-2-lipgloss.Width(mark)-lipgloss.Width(num)-lipgloss.Width(title)-len(dur))
+		pad := max(1, w-2-lipgloss.Width(mark)-lipgloss.Width(num)-lipgloss.Width(title)-lipgloss.Width(dur))
 		row := " " + mark + num + title + strings.Repeat(" ", pad) + mutedStyle.Render(dur) + " "
 		if i == m.cursor {
 			row = cursorStyle.Width(w).Render(row)
@@ -337,7 +346,7 @@ func (m Model) renderHelp(w int) string {
 		{"s", "toggle shuffle"},
 		{"r", "cycle repeat: off → all → track"},
 		{"A", "add track to Liked Songs or a playlist"},
-		{"f", "add track to Liked Songs"},
+		{"f", "add track to / remove it from Liked Songs"},
 		{"o", "play a Spotify URI or link"},
 		{"a", "add a URI or link to the queue"},
 		{"b", "toggle library (Liked Songs and playlists)"},

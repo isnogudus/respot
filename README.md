@@ -25,7 +25,7 @@ LIBRESPOT_ADDR=http://pi.local:3678 ./my-spotify-tui
 | `s`            | toggle shuffle                           |
 | `r`            | cycle repeat: off → all → track          |
 | `A`            | add the selected (or playing) track to Liked Songs or one of your playlists |
-| `f`            | add the selected (or playing) track to Liked Songs |
+| `f`            | add the selected (or playing) track to Liked Songs, or remove it when it is liked (♥) |
 | `o`            | play a Spotify URI or open.spotify.com link |
 | `a`            | add a URI or link to the queue           |
 | `b`            | toggle the library (Liked Songs and playlists) |

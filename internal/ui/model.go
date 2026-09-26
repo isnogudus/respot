@@ -115,6 +115,12 @@ type Model struct {
 
 	popup *addPopup
 
+	// Liked state of tracks, asked for the playing track and visible rows.
+	liked            map[string]bool
+	likedPending     map[string]bool
+	likedAt          time.Time
+	likedUnavailable bool
+
 	mode  inputMode
 	input textinput.Model
 }
@@ -245,7 +251,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status, m.statusAt = msg.st, time.Now()
 		cmd := m.syncList(false)
 		m.followCursor(false)
-		return m, cmd
+		return m, tea.Batch(cmd, m.fetchLiked())
 
 	case listMsg:
 		if msg.uri != m.listURI {
@@ -259,10 +265,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.list, m.listErr = msg.ct, msg.err
 		if msg.ct != nil {
 			m.followCursor(false)
+			likedCmd := m.fetchLiked()
 			if !msg.ct.Complete() && m.pane == paneTracks && m.listStalls < listMaxStalls {
 				uri := msg.uri
-				return m, tea.Tick(listPollInterval, func(time.Time) tea.Msg { return listPollMsg{uri: uri} })
+				return m, tea.Batch(likedCmd, tea.Tick(listPollInterval, func(time.Time) tea.Msg { return listPollMsg{uri: uri} }))
 			}
+			return m, likedCmd
 		}
 		return m, nil
 
@@ -284,10 +292,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case libraryWriteMsg:
 		if msg.err != nil {
 			m.setErr(msg.err)
-		} else {
-			m.note, m.noteAt = msg.note, time.Now()
+			return m, nil
+		}
+		m.note, m.noteAt = msg.note, time.Now()
+		if msg.likedURI != "" && m.liked != nil {
+			m.liked[msg.likedURI] = msg.liked
 		}
 		return m, nil
+
+	case likedMsg:
+		return m.applyLiked(msg)
 
 	case tea.KeyMsg:
 		if m.mode != inputNone {
@@ -384,7 +398,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "A":
 		return m.openAddPopup()
 	case "f":
-		return m.likeTarget()
+		return m.toggleLiked()
 	case "o":
 		return m.startInput(inputPlay)
 	case "a":
@@ -475,7 +489,7 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if navigate(msg.String(), &m.cursor, &m.offset, len(m.list.Tracks), m.listHeight()) {
 		m.navigated = true
-		return m, nil
+		return m, m.fetchLiked()
 	}
 	switch msg.String() {
 	case "c":

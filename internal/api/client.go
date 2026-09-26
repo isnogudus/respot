@@ -24,6 +24,9 @@ var (
 	// ErrLibraryWriteUnavailable is returned when the daemon cannot write to
 	// Liked Songs or playlists.
 	ErrLibraryWriteUnavailable = errors.New("daemon cannot write to the library")
+	// ErrLikedUnavailable is returned when the daemon cannot tell which
+	// tracks are liked.
+	ErrLikedUnavailable = errors.New("liked state unavailable")
 	// ErrNoSession is returned when the daemon has no active Spotify session.
 	ErrNoSession = errors.New("no active Spotify session")
 )
@@ -212,6 +215,35 @@ func (c *Client) LibraryPlaylists(ctx context.Context) ([]LibraryPlaylist, error
 			return all, nil
 		}
 	}
+}
+
+type likedStates struct {
+	Items []struct {
+		URI   string `json:"uri"`
+		Liked bool   `json:"liked"`
+	} `json:"items"`
+}
+
+// MaxLikedQuery is how many URIs one Liked query may carry.
+const MaxLikedQuery = 50
+
+// Liked tells for each of uris whether it is in Liked Songs.
+func (c *Client) Liked(ctx context.Context, uris []string) (map[string]bool, error) {
+	var states likedStates
+	code, err := c.do(ctx, http.MethodGet, "/library/liked?uris="+url.QueryEscape(strings.Join(uris, ",")), nil, &states)
+	switch {
+	case code == http.StatusNotFound:
+		return nil, ErrLikedUnavailable
+	case err != nil:
+		return nil, err
+	case code == http.StatusNoContent:
+		return nil, ErrNoSession
+	}
+	out := make(map[string]bool, len(states.Items))
+	for _, s := range states.Items {
+		out[s.URI] = s.Liked
+	}
+	return out, nil
 }
 
 // SetLiked saves uris to, or removes them from, Liked Songs.

@@ -29,6 +29,10 @@ type addPopup struct {
 type libraryWriteMsg struct {
 	note string
 	err  error
+
+	// likedURI is set when the write changed a track's liked state to liked.
+	likedURI string
+	liked    bool
 }
 
 // addTarget is the track an add acts on: the one under the cursor in a track
@@ -77,16 +81,6 @@ func (m Model) openAddPopup() (tea.Model, tea.Cmd) {
 	return m.reloadLibrary()
 }
 
-// likeTarget saves the target track to Liked Songs without the popup.
-func (m Model) likeTarget() (tea.Model, tea.Cmd) {
-	uri, title, ok := m.addTarget()
-	if !ok || !strings.HasPrefix(uri, "spotify:track:") {
-		m.setErr(errors.New("no track to add to " + likedSongsName))
-		return m, nil
-	}
-	return m, m.addTo(libraryEntry{name: likedSongsName, liked: true}, uri, title)
-}
-
 func (m Model) addTo(e libraryEntry, uri, title string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
@@ -100,7 +94,11 @@ func (m Model) addTo(e libraryEntry, uri, title string) tea.Cmd {
 		if errors.Is(err, api.ErrLibraryWriteUnavailable) {
 			err = errors.New("the daemon cannot add to the library; it needs the library write endpoints")
 		}
-		return libraryWriteMsg{note: "Added " + title + " to " + e.name, err: err}
+		msg := libraryWriteMsg{note: "Added " + title + " to " + e.name, err: err}
+		if e.liked {
+			msg.likedURI, msg.liked = uri, true
+		}
+		return msg
 	}
 }
 
@@ -151,6 +149,9 @@ func (m Model) renderPopup() string {
 			icon = accentStyle.Render("♥ ")
 		}
 		name := e.name
+		if liked, _ := m.likedState(p.uri); e.liked && liked {
+			name += subtleStyle.Render("  (already liked)")
+		}
 		if len(e.folder) > 0 {
 			name = subtleStyle.Render(strings.Join(e.folder, " › ")+" › ") + name
 		}
