@@ -19,10 +19,17 @@ func main() {
 		defAddr = "http://localhost:3678"
 	}
 	addr := flag.String("addr", defAddr, "go-librespot API base URL (env LIBRESPOT_ADDR)")
+	cover := flag.String("cover", "auto", "album cover: auto, iterm2, blocks or off")
 	flag.Parse()
 
+	coverMode, err := ui.ParseCoverMode(*cover)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(2)
+	}
+
 	client := api.New(*addr)
-	p := tea.NewProgram(ui.New(client), tea.WithAltScreen())
+	p := tea.NewProgram(ui.New(client, ui.Options{Cover: coverMode}), tea.WithAltScreen())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

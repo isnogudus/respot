@@ -79,7 +79,7 @@ func testTracks(uri string, n int) *api.ContextTracks {
 // newTestModel is playing track 1 of testCtx with a small library loaded.
 func newTestModel(t *testing.T) Model {
 	t.Helper()
-	m := New(api.New("http://127.0.0.1:1")) // refuses connections
+	m := New(api.New("http://127.0.0.1:1"), Options{Cover: CoverBlocks}) // refuses connections
 	m = update(m, tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = update(m, status(testCtx, 1))
 	m = update(m, playlistsMsg{items: []api.LibraryPlaylist{

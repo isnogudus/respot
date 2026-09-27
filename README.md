@@ -31,9 +31,11 @@ Start
 - **↑ / ↓** move, **→** opens the row, **←** goes back to where you were.
 - **Enter** plays the row: a playlist, album or artist from its start, a track
   within the page's list.
-- The player shows the album cover in coloured half blocks (`▀`), which works
-  in any terminal with 24-bit colour; it hides in windows smaller than 60 × 24
-  and with `i`.
+- The player shows the album cover, 5 rows high. In iTerm2 it is the real
+  image (iTerm2's inline image protocol); elsewhere, and inside tmux, it is
+  drawn in coloured half blocks (`▀`). `-cover auto|iterm2|blocks|off`
+  overrides the choice, `i` hides it, and it hides in windows smaller than
+  60 × 20.
 - **→ on a track** opens its actions: play, queue, add to or remove from Liked
   Songs, add to a playlist, go to its album or artist.
 

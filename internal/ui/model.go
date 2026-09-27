@@ -100,8 +100,10 @@ type Model struct {
 
 	menu *menu
 
-	covers   covers
-	coverOff bool // hidden with i
+	covers     covers
+	coverMode  CoverMode
+	coverOff   bool    // hidden with i
+	cellAspect float64 // cell height over width, 0 when unknown
 
 	// Liked state of tracks, asked for the playing track and visible rows.
 	liked            map[string]bool
@@ -113,15 +115,21 @@ type Model struct {
 	input textinput.Model
 }
 
+// Options configure the UI.
+type Options struct {
+	Cover CoverMode
+}
+
 // New creates the root model.
-func New(client *api.Client) Model {
+func New(client *api.Client, opts Options) Model {
 	ti := textinput.New()
 	ti.CharLimit = 256
 	return Model{
-		client: client,
-		input:  ti,
-		stack:  []page{{kind: pageHome, title: "Start"}},
-		lists:  map[string]*listState{},
+		client:    client,
+		input:     ti,
+		stack:     []page{{kind: pageHome, title: "Start"}},
+		lists:     map[string]*listState{},
+		coverMode: opts.Cover.resolve(),
 	}
 }
 
@@ -202,6 +210,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.input.Width = max(10, min(msg.Width, maxWidth)-40)
+		m.cellAspect = terminalCellAspect()
 		m.clampOffset()
 		return m, nil
 

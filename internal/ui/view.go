@@ -77,8 +77,10 @@ func (m Model) View() string {
 		box = m.renderMenu()
 	}
 	if box != "" {
+		// Overlays stay below the player: drawing over the cover's cells
+		// would cut through the image escape of its first row.
 		x := max(0, (w-lipgloss.Width(box))/2)
-		y := max(0, (bodyHeight-lipgloss.Height(box))/2)
+		y := max(m.headerHeight(), (bodyHeight-lipgloss.Height(box))/2)
 		lines = overlay(lines, box, x, y)
 	}
 
@@ -107,13 +109,8 @@ func (m Model) renderPlayer(w int) []string {
 		return append([]string{device}, m.compactPlayer(w)...)
 	}
 
-	cover := coverPlaceholder()
-	if url := coverURL(m.trackOrNil()); url != "" {
-		if lines, ok := m.covers.get(url); ok {
-			cover = lines
-		}
-	}
-	infoW := w - coverCols - 3
+	cover := m.coverCells()
+	infoW := w - m.coverCols() - 3
 	info := m.playerInfo(infoW)
 	lines := []string{device}
 	for i := range coverRows {
@@ -188,18 +185,15 @@ func (m Model) playerInfo(w int) []string {
 		return append([]string{""}, lines...)
 	}
 	t := m.status.Track
-	lines := []string{
-		m.titleWithHeart(),
-		mutedStyle.Render(strings.Join(t.ArtistNames, ", ")),
-		subtleStyle.Render(albumLine(t)),
+	artists := mutedStyle.Render(strings.Join(t.ArtistNames, ", "))
+	if album := albumLine(t); album != "" {
+		artists += subtleStyle.Render(" · " + album)
 	}
+	from := ""
 	if name := m.contextName(); name != "" {
-		lines = append(lines, subtleStyle.Render("from "+name))
-	} else {
-		lines = append(lines, "")
+		from = subtleStyle.Render("from " + name)
 	}
-	lines = append(lines, "", m.progressLine(max(10, w-16)), m.controls())
-	return lines
+	return []string{m.titleWithHeart(), artists, from, m.progressLine(max(10, w-16)), m.controls()}
 }
 
 // compactPlayer is the player in two lines, without the cover.
