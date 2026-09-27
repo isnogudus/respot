@@ -14,56 +14,65 @@ go build -o my-spotify-tui .
 LIBRESPOT_ADDR=http://pi.local:3678 ./my-spotify-tui
 ```
 
+## Browsing
+
+The UI works like lynx: the player sits on top, below it a page you browse
+with the arrow keys.
+
+```
+Start
+├─ ▶ Now playing · <what plays now>
+├─ ♥ Liked Songs
+├─ ≡ Playlists      ← your Spotify folders are folders here too
+├─ ◎ Albums         ← saved albums
+└─ ☺ Artists        ← followed artists
+```
+
+- **↑ / ↓** move, **→** opens the row, **←** goes back to where you were.
+- **Enter** plays the row: a playlist, album or artist from its start, a track
+  within the page's list.
+- **→ on a track** opens its actions: play, queue, add to or remove from Liked
+  Songs, add to a playlist, go to its album or artist.
+
 ## Keys
 
-| Key            | Action                                   |
-|----------------|------------------------------------------|
-| `space`        | play / pause                             |
-| `n` / `p`      | next / previous track                    |
-| `←` / `→`      | seek ±10 s                               |
-| `+` / `-`      | volume ±5 %                              |
-| `s`            | toggle shuffle                           |
-| `r`            | cycle repeat: off → all → track          |
-| `A`            | add the selected (or playing) track to Liked Songs or one of your playlists |
-| `f`            | add the selected (or playing) track to Liked Songs, or remove it when it is liked (♥) |
-| `o`            | play a Spotify URI or open.spotify.com link |
-| `a`            | add a URI or link to the queue           |
-| `b`            | toggle the library (Liked Songs and playlists) |
-| `l`            | toggle "Now playing", the list of what is playing now; in the library, show the selected playlist's tracks |
-| `esc`          | back to the library / close the panel    |
-| `j` `k` `g` `G`| navigate lists                           |
-| `enter`        | in the library, open the selected playlist; in a track list, play the selected track |
-| `P`            | play the selected playlist from the library |
-| `/`            | filter the library by name or folder; `enter` keeps the filter, `esc` clears it |
-| `e`            | enqueue the selected track               |
-| `c`            | jump to what is playing (and follow it again) |
-| `ctrl+r`       | reload the library                       |
-| `?`            | help                                     |
-| `q`            | quit                                     |
+| Key                | Action                                         |
+|--------------------|------------------------------------------------|
+| `↑` `↓` / `j` `k`  | move (`pgup` `pgdn` `g` `G` too)               |
+| `→` / `l`          | open; on a track: its actions                  |
+| `←` / `h`          | back                                           |
+| `enter`            | play the row                                   |
+| `/`                | filter the page; `enter` keeps it, `esc` clears it |
+| `m`                | start page                                     |
+| `c`                | now playing, on the playing track (and follow it again) |
+| `space`            | play / pause                                   |
+| `n` / `p`          | next / previous track                          |
+| `shift+←` / `shift+→` | seek ±10 s                                  |
+| `+` / `-`          | volume ±5 %                                    |
+| `s`                | toggle shuffle                                 |
+| `r`                | cycle repeat: off → all → track                |
+| `f`                | add the selected (or playing) track to Liked Songs, or remove it when liked (♥) |
+| `A`                | add the selected (or playing) track to Liked Songs or a playlist |
+| `e`                | add the selected track to the queue            |
+| `o` / `a`          | play / queue a Spotify URI or open.spotify.com link |
+| `ctrl+r`           | reload the library                             |
+| `?`                | help                                           |
+| `q`                | quit                                           |
 
-## Library
+## Daemon requirements
 
-The library lists Liked Songs and the playlists of your library, including
-followed and Spotify-owned ones, via `GET /library/playlists`. That endpoint is
-not part of upstream go-librespot yet; it needs a build of the
-`feature/library-playlists` branch. With other daemons the library panel shows a
-hint and everything else keeps working.
-
-Adding tracks uses `POST /library/liked` and `POST /library/playlists/add_tracks`
-from the `feature/library-write` branch; the popup offers only playlists you may
-edit.
-
-## Track list
-
-The track list uses `GET /context/tracks`, which requires a go-librespot version that
-provides it and metadata caching enabled in `config.yml`:
+Track lists use `GET /context/tracks`, which needs metadata caching in the
+daemon's `config.yml`:
 
 ```yaml
 metadata:
   enabled: true
 ```
 
-While the list is open the cursor follows the playing track. Moving the cursor
-yourself pauses that; `c` or `enter` resumes it.
-
-Without it the rest of the UI works normally and the list shows a hint.
+The library pages, Liked Songs hearts, adding tracks and the album and artist
+links use endpoints that are not in upstream go-librespot yet
+(`/library/playlists`, `/library/albums`, `/library/artists`,
+`/library/liked`, `/library/playlists/add_tracks` and `album_uri` /
+`artist_uris` on tracks). Build the daemon from the `feature/library-write`
+branch of the fork for them; with other daemons those parts show a hint and
+everything else keeps working.

@@ -36,7 +36,9 @@ type Track struct {
 	URI           string   `json:"uri"`
 	Name          string   `json:"name"`
 	ArtistNames   []string `json:"artist_names"`
+	ArtistURIs    []string `json:"artist_uris"`
 	AlbumName     string   `json:"album_name"`
+	AlbumURI      string   `json:"album_uri"`
 	AlbumCoverURL *string  `json:"album_cover_url"`
 	Position      int64    `json:"position"`
 	Duration      int64    `json:"duration"`
@@ -104,9 +106,25 @@ type LibraryPlaylist struct {
 	Folder        []string `json:"folder"`
 }
 
-type libraryPage struct {
-	Total int               `json:"total"`
-	Items []LibraryPlaylist `json:"items"`
+// LibraryAlbum is an album saved in the user's library.
+type LibraryAlbum struct {
+	URI         string   `json:"uri"`
+	Name        string   `json:"name"`
+	ArtistNames []string `json:"artist_names"`
+	Year        int      `json:"year"`
+	ImageURL    *string  `json:"image_url"`
+}
+
+// LibraryArtist is an artist the user follows.
+type LibraryArtist struct {
+	URI      string  `json:"uri"`
+	Name     string  `json:"name"`
+	ImageURL *string `json:"image_url"`
+}
+
+type libraryPage[T any] struct {
+	Total int `json:"total"`
+	Items []T `json:"items"`
 }
 
 // libraryPageSize is the largest page /library/playlists hands out.
@@ -197,11 +215,25 @@ func (c *Client) ContextTracks(ctx context.Context, uri string) (*ContextTracks,
 
 // LibraryPlaylists lists all playlists in the user's library, in library order.
 func (c *Client) LibraryPlaylists(ctx context.Context) ([]LibraryPlaylist, error) {
-	var all []LibraryPlaylist
+	return fetchAllPages[LibraryPlaylist](ctx, c, "/library/playlists")
+}
+
+// LibraryAlbums lists the user's saved albums, most recently saved first.
+func (c *Client) LibraryAlbums(ctx context.Context) ([]LibraryAlbum, error) {
+	return fetchAllPages[LibraryAlbum](ctx, c, "/library/albums")
+}
+
+// LibraryArtists lists the artists the user follows, most recent first.
+func (c *Client) LibraryArtists(ctx context.Context) ([]LibraryArtist, error) {
+	return fetchAllPages[LibraryArtist](ctx, c, "/library/artists")
+}
+
+// fetchAllPages reads every page of a library listing.
+func fetchAllPages[T any](ctx context.Context, c *Client, path string) ([]T, error) {
+	var all []T
 	for {
-		var page libraryPage
-		path := fmt.Sprintf("/library/playlists?offset=%d&limit=%d", len(all), libraryPageSize)
-		code, err := c.do(ctx, http.MethodGet, path, nil, &page)
+		var page libraryPage[T]
+		code, err := c.do(ctx, http.MethodGet, fmt.Sprintf("%s?offset=%d&limit=%d", path, len(all), libraryPageSize), nil, &page)
 		switch {
 		case code == http.StatusNotFound:
 			return nil, ErrLibraryUnavailable
