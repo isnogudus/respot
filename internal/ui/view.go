@@ -227,15 +227,23 @@ func (m Model) controls() string {
 	st := m.status
 	steps := max(1, st.VolumeSteps)
 	parts := []string{mutedStyle.Render(fmt.Sprintf("vol %d%%", st.Volume*100/steps))}
+
+	// Shuffle and repeat always show their state, next to the key that
+	// changes it.
+	shuffle := mutedStyle.Render("→ in order")
 	if st.ShuffleContext {
-		parts = append(parts, accentStyle.Render("⤮ shuffle"))
+		shuffle = accentStyle.Render("⤮ shuffle")
 	}
+	parts = append(parts, keyStyle.Render("s")+" "+shuffle)
+
+	repeat := mutedStyle.Render("⟳ off")
 	switch {
 	case st.RepeatTrack:
-		parts = append(parts, accentStyle.Render("⟳ track"))
+		repeat = accentStyle.Render("⟳ track")
 	case st.RepeatContext:
-		parts = append(parts, accentStyle.Render("⟳ all"))
+		repeat = accentStyle.Render("⟳ all")
 	}
+	parts = append(parts, keyStyle.Render("r")+" "+repeat)
 	if st.Track != nil {
 		if q := audioInfo(st.Track); q != "" {
 			parts = append(parts, subtleStyle.Render(q))
@@ -449,7 +457,8 @@ func (m Model) renderHelp(w int) string {
 			{"n  p", "next / previous track"},
 			{"⇧← ⇧→", "seek ±10 s"},
 			{"+  -", "volume ±5 %"},
-			{"s  r", "shuffle · repeat off/all/track"},
+			{"s", "shuffle ⤮ / play in order →"},
+			{"r", "repeat off → all → track"},
 		}},
 		{"Tracks", [][2]string{
 			{"f", "add to / remove from Liked Songs"},

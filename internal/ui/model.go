@@ -325,11 +325,29 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		on := !st.ShuffleContext
+		// Show the new mode at once; the status that follows confirms it.
+		next := *st
+		next.ShuffleContext = on
+		m.status = &next
+		m.setNote(map[bool]string{true: "Shuffle on", false: "Playing in order"}[on])
 		return m, m.action(func(ctx context.Context) error { return m.client.SetShuffle(ctx, on) })
 	case "r":
 		if st == nil {
 			return m, nil
 		}
+		next := *st
+		switch {
+		case st.RepeatTrack:
+			next.RepeatTrack, next.RepeatContext = false, false
+			m.setNote("Repeat off")
+		case st.RepeatContext:
+			next.RepeatTrack = true
+			m.setNote("Repeat track")
+		default:
+			next.RepeatContext = true
+			m.setNote("Repeat all")
+		}
+		m.status = &next
 		return m, m.action(m.cycleRepeat(st))
 	case "f":
 		return m.toggleLiked()

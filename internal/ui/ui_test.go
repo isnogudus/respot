@@ -450,3 +450,30 @@ func TestNormalizeURI(t *testing.T) {
 		}
 	}
 }
+
+func TestShuffleAndRepeatAlwaysShown(t *testing.T) {
+	m := newTestModel(t)
+	if c := ansi.Strip(m.controls()); !strings.Contains(c, "s → in order") || !strings.Contains(c, "r ⟳ off") {
+		t.Fatalf("modes must show when off: %q", c)
+	}
+
+	nm, cmd := m.Update(key("s"))
+	m = nm.(Model)
+	if cmd == nil || !m.status.ShuffleContext || m.note != "Shuffle on" {
+		t.Fatalf("s must switch to shuffle at once and ask the daemon")
+	}
+	if c := ansi.Strip(m.controls()); !strings.Contains(c, "s ⤮ shuffle") {
+		t.Fatalf("shuffle must show: %q", c)
+	}
+	m = press(m, "s")
+	if m.status.ShuffleContext || m.note != "Playing in order" {
+		t.Fatalf("s again must switch back to playing in order")
+	}
+
+	for _, want := range []string{"⟳ all", "⟳ track", "⟳ off"} {
+		m = press(m, "r")
+		if c := ansi.Strip(m.controls()); !strings.Contains(c, "r "+want) {
+			t.Fatalf("repeat must cycle to %q, got %q", want, c)
+		}
+	}
+}
