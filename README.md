@@ -29,7 +29,7 @@ LIBRESPOT_ADDR=http://pi.local:3678 ./my-spotify-tui
 | `o`            | play a Spotify URI or open.spotify.com link |
 | `a`            | add a URI or link to the queue           |
 | `b`            | toggle the library (Liked Songs and playlists) |
-| `l`            | toggle the track list of the current context; in the library, show the selected playlist's tracks |
+| `l`            | toggle "Now playing", the list of what is playing now; in the library, show the selected playlist's tracks |
 | `esc`          | back to the library / close the panel    |
 | `j` `k` `g` `G`| navigate lists                           |
 | `enter`        | in the library, open the selected playlist; in a track list, play the selected track |

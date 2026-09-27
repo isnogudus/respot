@@ -71,6 +71,24 @@ func (m Model) allLibraryEntries() []libraryEntry {
 	return out
 }
 
+// contextName names the playing context: the daemon's name for it, else the
+// name it has in the library. The daemon gives none for Liked Songs.
+func (m Model) contextName() string {
+	if m.status != nil && m.status.ContextName != nil && *m.status.ContextName != "" {
+		return *m.status.ContextName
+	}
+	uri := m.contextURI()
+	if uri == "" {
+		return ""
+	}
+	for _, e := range m.allLibraryEntries() {
+		if e.uri == uri {
+			return e.name
+		}
+	}
+	return ""
+}
+
 func (m Model) openLibrary() (tea.Model, tea.Cmd) {
 	m.pane = paneLibrary
 	if m.libLoading || (m.libLoaded && m.libErr == nil) {

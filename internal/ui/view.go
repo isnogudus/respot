@@ -223,20 +223,19 @@ func (m Model) listHeightFor(top string) int {
 
 func (m Model) renderList(rows int) string {
 	w := m.contentWidth()
-	header := " " + titleStyle.Render("Tracks")
+	header := " " + titleStyle.Render("Now playing")
 	hints := "enter play · e queue · esc close"
-	switch {
-	case m.browseName != "":
-		header += mutedStyle.Render(" · " + m.browseName)
+	if m.browseName != "" {
+		header = " " + titleStyle.Render("Tracks") + mutedStyle.Render(" · "+m.browseName)
 		hints = "enter play · e queue · esc library"
-	case m.status != nil && m.status.ContextName != nil:
-		header += mutedStyle.Render(" · " + *m.status.ContextName)
+	} else if name := m.contextName(); name != "" {
+		header += mutedStyle.Render(" · " + name)
 	}
 
 	var body []string
 	switch {
 	case m.listURI == "":
-		body = []string{subtleStyle.Render(" Nothing is playing from a playlist or album.")}
+		body = []string{subtleStyle.Render(" Nothing is playing from a playlist, album or Liked Songs.")}
 	case m.listErr != nil:
 		msg := m.listErr.Error()
 		if m.listErr == api.ErrContextTracksUnavailable {
@@ -329,7 +328,7 @@ func (m Model) renderMessageLine() string {
 // renderKeyLine is the always-visible line of global keys.
 func (m Model) renderKeyLine() string {
 	w := m.contentWidth()
-	keys := [][2]string{{"space", "play/pause"}, {"n/p", "next/prev"}, {"←/→", "seek"}, {"+/-", "vol"}, {"b", "library"}, {"l", "tracks"}, {"A", "add to"}, {"?", "help"}, {"q", "quit"}}
+	keys := [][2]string{{"space", "play/pause"}, {"n/p", "skip"}, {"←/→", "seek"}, {"+/-", "vol"}, {"b", "library"}, {"l", "now playing"}, {"A", "add"}, {"?", "help"}, {"q", "quit"}}
 	var parts []string
 	for _, k := range keys {
 		parts = append(parts, keyStyle.Render(k[0])+" "+subtleStyle.Render(k[1]))
@@ -350,7 +349,7 @@ func (m Model) renderHelp(w int) string {
 		{"o", "play a Spotify URI or link"},
 		{"a", "add a URI or link to the queue"},
 		{"b", "toggle library (Liked Songs and playlists)"},
-		{"l", "toggle track list of current context"},
+		{"l", "toggle the list of what is playing now"},
 		{"j k g G", "move in lists (pgup/pgdn too)"},
 		{"enter", "library: open playlist · tracks: play track"},
 		{"P", "play selected playlist from the library"},

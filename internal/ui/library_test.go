@@ -159,3 +159,18 @@ func TestLibraryFilterIgnoresGlobalKeys(t *testing.T) {
 		t.Fatalf("typing q in the filter must filter, not quit (filter=%q)", m.libFilter)
 	}
 }
+
+func TestContextNameFallsBackToLibrary(t *testing.T) {
+	m := newLibraryModel(t)
+	liked := likedSongsURI("me")
+	m = update(m, statusMsg{st: &api.Status{Username: "me", ContextURI: &liked}})
+	if got := m.contextName(); got != likedSongsName {
+		t.Fatalf("context name = %q, want %q for Liked Songs without a daemon name", got, likedSongsName)
+	}
+
+	named, name := testCtx, "From Daemon"
+	m = update(m, statusMsg{st: &api.Status{Username: "me", ContextURI: &named, ContextName: &name}})
+	if got := m.contextName(); got != name {
+		t.Fatalf("context name = %q, want the daemon's %q", got, name)
+	}
+}
