@@ -100,6 +100,9 @@ type Model struct {
 
 	menu *menu
 
+	covers   covers
+	coverOff bool // hidden with i
+
 	// Liked state of tracks, asked for the playing track and visible rows.
 	liked            map[string]bool
 	likedPending     map[string]bool
@@ -199,6 +202,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.input.Width = max(10, min(msg.Width, maxWidth)-40)
+		m.clampOffset()
 		return m, nil
 
 	case tickMsg:
@@ -236,7 +240,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status, m.statusAt = msg.st, time.Now()
 		cmd := m.syncList()
 		m.followCursor(false)
-		return m, tea.Batch(cmd, m.fetchLiked())
+		return m, tea.Batch(cmd, m.fetchLiked(), m.fetchCovers())
+
+	case coverMsg:
+		return m.applyCover(msg), nil
 
 	case listMsg:
 		return m.applyList(msg)
@@ -327,6 +334,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.startInput(inputQueue)
 	case "/":
 		return m.startInput(inputFilter)
+	case "i":
+		m.coverOff = !m.coverOff
+		m.clampOffset()
+		return m, m.fetchCovers()
 	case "m":
 		return m.goHome()
 	case "c":

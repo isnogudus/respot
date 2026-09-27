@@ -14,8 +14,6 @@ import (
 
 const (
 	maxWidth = 100
-	// headerHeight is the player (three lines), the rule and the breadcrumb.
-	headerHeight = 5
 	// footerHeight is the message line plus the key line.
 	footerHeight = 2
 )
@@ -39,9 +37,18 @@ var (
 
 func (m Model) contentWidth() int { return min(m.width, maxWidth) }
 
+// headerHeight is the player, the rule and the breadcrumb: the device line
+// and either the cover's rows or two compact lines.
+func (m Model) headerHeight() int {
+	if m.showCover() {
+		return 1 + coverRows + 2
+	}
+	return 3 + 2
+}
+
 // listHeight is how many rows a page shows.
 func (m Model) listHeight() int {
-	return max(3, m.height-headerHeight-footerHeight)
+	return max(3, m.height-m.headerHeight()-footerHeight)
 }
 
 func (m Model) View() string {
@@ -78,7 +85,8 @@ func (m Model) View() string {
 	return strings.Join(lines, "\n") + "\n" + m.renderMessageLine() + "\n" + m.renderKeyLine()
 }
 
-// renderPlayer is the three player lines: device, track, progress.
+// renderPlayer is the device line and the player, with the cover beside it
+// when there is room, else two compact lines.
 func (m Model) renderPlayer(w int) []string {
 	left := boldAccent.Render(" ♫ go-librespot")
 	if st := m.status; st != nil {
@@ -95,64 +103,134 @@ func (m Model) renderPlayer(w int) []string {
 	}
 	device := left + strings.Repeat(" ", max(1, w-lipgloss.Width(left)-lipgloss.Width(right))) + right
 
-	switch {
-	case !m.loaded:
-		return []string{device, mutedStyle.Render(" Connecting to " + m.client.Base() + " …"), ""}
-	case !m.reachable:
-		return []string{device, errStyle.Render(ansi.Truncate(" Cannot reach go-librespot: "+fmt.Sprint(m.connErr), w, "…")),
-			subtleStyle.Render(" Retrying every few seconds.")}
-	case m.status == nil:
-		return []string{device, mutedStyle.Render(" No active Spotify session."),
-			subtleStyle.Render(" Select this device in a Spotify app to start.")}
-	case m.status.Track == nil:
-		return []string{device, mutedStyle.Render(" Nothing playing."), m.renderControls(w, "")}
+	if !m.showCover() {
+		return append([]string{device}, m.compactPlayer(w)...)
 	}
 
-	st, t := m.status, m.status.Track
-	icon := "▶"
+	cover := coverPlaceholder()
+	if url := coverURL(m.trackOrNil()); url != "" {
+		if lines, ok := m.covers.get(url); ok {
+			cover = lines
+		}
+	}
+	infoW := w - coverCols - 3
+	info := m.playerInfo(infoW)
+	lines := []string{device}
+	for i := range coverRows {
+		line := " " + cover[i] + "  "
+		if i < len(info) {
+			line += ansi.Truncate(info[i], infoW, "…")
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+func (m Model) trackOrNil() *api.Track {
+	if m.status == nil {
+		return nil
+	}
+	return m.status.Track
+}
+
+// stateLines explains why nothing plays, or nil when a track is there.
+func (m Model) stateLines() []string {
+	switch {
+	case !m.loaded:
+		return []string{mutedStyle.Render("Connecting to " + m.client.Base() + " …")}
+	case !m.reachable:
+		return []string{errStyle.Render("Cannot reach go-librespot: " + fmt.Sprint(m.connErr)),
+			subtleStyle.Render("Retrying every few seconds.")}
+	case m.status == nil:
+		return []string{mutedStyle.Render("No active Spotify session."),
+			subtleStyle.Render("Select this device in a Spotify app to start.")}
+	case m.status.Track == nil:
+		return []string{mutedStyle.Render("Nothing playing."), subtleStyle.Render("Pick something below and press enter.")}
+	}
+	return nil
+}
+
+func (m Model) playIcon() string {
+	st := m.status
 	switch {
 	case st.Buffering:
-		icon = "…"
+		return "…"
 	case st.Stopped:
-		icon = "■"
+		return "■"
 	case st.Paused:
-		icon = "⏸"
+		return "⏸"
 	}
-	title := " " + accentStyle.Render(icon) + " " + titleStyle.Render(t.Name)
+	return "▶"
+}
+
+func (m Model) titleWithHeart() string {
+	t := m.status.Track
+	title := accentStyle.Render(m.playIcon()) + " " + titleStyle.Render(t.Name)
 	if liked, _ := m.likedState(t.URI); liked {
 		title += accentStyle.Render(" ♥")
 	}
-	title += mutedStyle.Render(" — " + strings.Join(t.ArtistNames, ", "))
-	if album := albumLine(t); album != "" {
-		title += subtleStyle.Render(" · " + album)
-	}
+	return title
+}
 
+func (m Model) progressLine(barW int) string {
+	t := m.status.Track
 	pos := m.position()
-	times := fmt.Sprintf("%s / %s", fmtDur(pos), fmtDur(t.Duration))
 	frac := 0.0
 	if t.Duration > 0 {
 		frac = float64(pos) / float64(t.Duration)
 	}
-	progress := "   " + bar(frac, 24) + " " + mutedStyle.Render(times)
-	return []string{device, ansi.Truncate(title, w, "…"), m.renderControls(w, progress)}
+	return bar(frac, barW) + " " + mutedStyle.Render(fmt.Sprintf("%s / %s", fmtDur(pos), fmtDur(t.Duration)))
 }
 
-var yearRe = regexp.MustCompile(`year:(\d{4})`)
-
-func albumLine(t *api.Track) string {
-	album := t.AlbumName
-	if y := yearRe.FindStringSubmatch(t.ReleaseDate); y != nil {
-		album += " (" + y[1] + ")"
+// playerInfo is the text beside the cover.
+func (m Model) playerInfo(w int) []string {
+	if lines := m.stateLines(); lines != nil {
+		return append([]string{""}, lines...)
 	}
-	return album
+	t := m.status.Track
+	lines := []string{
+		m.titleWithHeart(),
+		mutedStyle.Render(strings.Join(t.ArtistNames, ", ")),
+		subtleStyle.Render(albumLine(t)),
+	}
+	if name := m.contextName(); name != "" {
+		lines = append(lines, subtleStyle.Render("from "+name))
+	} else {
+		lines = append(lines, "")
+	}
+	lines = append(lines, "", m.progressLine(max(10, w-16)), m.controls())
+	return lines
 }
 
-// renderControls is the progress line with volume, shuffle and repeat.
-func (m Model) renderControls(w int, progress string) string {
+// compactPlayer is the player in two lines, without the cover.
+func (m Model) compactPlayer(w int) []string {
+	if lines := m.stateLines(); lines != nil {
+		for i := range lines {
+			lines[i] = " " + lines[i]
+		}
+		if len(lines) == 1 {
+			lines = append(lines, "")
+		}
+		return lines[:2]
+	}
+	t := m.status.Track
+	title := " " + m.titleWithHeart() + mutedStyle.Render(" — "+strings.Join(t.ArtistNames, ", "))
+	if album := albumLine(t); album != "" {
+		title += subtleStyle.Render(" · " + album)
+	}
+	progress := "   " + m.progressLine(24)
+	controls := m.controls() + " "
+	pad := w - lipgloss.Width(progress) - lipgloss.Width(controls)
+	line2 := ansi.Truncate(progress, w, "…")
+	if pad >= 2 {
+		line2 = progress + strings.Repeat(" ", pad) + controls
+	}
+	return []string{ansi.Truncate(title, w, "…"), line2}
+}
+
+// controls is volume, shuffle, repeat and the audio format.
+func (m Model) controls() string {
 	st := m.status
-	if st == nil {
-		return progress
-	}
 	steps := max(1, st.VolumeSteps)
 	parts := []string{mutedStyle.Render(fmt.Sprintf("vol %d%%", st.Volume*100/steps))}
 	if st.ShuffleContext {
@@ -169,12 +247,17 @@ func (m Model) renderControls(w int, progress string) string {
 			parts = append(parts, subtleStyle.Render(q))
 		}
 	}
-	right := strings.Join(parts, "   ") + " "
-	pad := w - lipgloss.Width(progress) - lipgloss.Width(right)
-	if pad < 2 {
-		return ansi.Truncate(progress, w, "…")
+	return strings.Join(parts, "   ")
+}
+
+var yearRe = regexp.MustCompile(`year:(\d{4})`)
+
+func albumLine(t *api.Track) string {
+	album := t.AlbumName
+	if y := yearRe.FindStringSubmatch(t.ReleaseDate); y != nil {
+		album += " (" + y[1] + ")"
 	}
-	return progress + strings.Repeat(" ", pad) + right
+	return album
 }
 
 func audioInfo(t *api.Track) string {
@@ -365,6 +448,7 @@ func (m Model) renderHelp(w int) string {
 			{"m", "start page"},
 			{"c", "now playing, on the playing track"},
 			{"ctrl+r", "reload the library"},
+			{"i", "show / hide the cover"},
 		}},
 		{"Player", [][2]string{
 			{"space", "play / pause"},

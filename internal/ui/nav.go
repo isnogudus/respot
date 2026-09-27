@@ -124,7 +124,7 @@ func (m Model) homeRows() []row {
 		if name := m.contextName(); name != "" {
 			label += " · " + name
 		}
-		rows = append(rows, row{icon: "▶", label: label, uri: uri, open: &page{kind: pageTracks, title: "Now playing"}})
+		rows = append(rows, row{icon: "♪", label: label, uri: uri, open: &page{kind: pageTracks, title: "Now playing"}})
 	}
 	if u := m.username(); u != "" {
 		uri := likedSongsURI(u)
@@ -228,6 +228,12 @@ func (m Model) selectedRow() (row, bool) {
 		return row{}, false
 	}
 	return rows[p.cursor], true
+}
+
+// clampOffset keeps the cursor visible after the page got shorter.
+func (m *Model) clampOffset() {
+	p := m.page()
+	scrollTo(p.cursor, &p.offset, m.listHeight())
 }
 
 func (m *Model) clampCursor() {

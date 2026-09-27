@@ -408,7 +408,7 @@ func TestHeartsAndPlayingMarkRendered(t *testing.T) {
 	m = update(m, listMsg{uri: testCtx, ct: testTracks(testCtx, 10)})
 	m = update(m, likedMsg{uris: []string{trackURI(1)}, states: map[string]bool{trackURI(1): true}})
 	view := ansi.Strip(m.View())
-	if !strings.Contains(view, "T1 ♥ — Band") {
+	if !strings.Contains(view, "T1 ♥") {
 		t.Fatalf("player must show the heart:\n%s", view)
 	}
 	found := false
