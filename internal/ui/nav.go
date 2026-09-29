@@ -100,6 +100,8 @@ func (m Model) rowsOf(p *page) []row {
 
 func countInfo(s loadState, n int, what string) string {
 	switch {
+	case errors.Is(s.err, api.ErrNoSession):
+		return "…" // loads again once the daemon has logged in
 	case s.err != nil:
 		return "unavailable"
 	case !s.loaded:

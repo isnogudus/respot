@@ -94,6 +94,22 @@ func (m *Model) fetchArtists() tea.Cmd {
 	return libraryFetch(m.client.LibraryArtists, func(v []api.LibraryArtist, err error) tea.Msg { return artistsMsg{v, err} })
 }
 
+// retryFailedLibrary loads again the listings that failed, as they do while
+// the daemon has no session yet.
+func (m *Model) retryFailedLibrary() tea.Cmd {
+	var cmds []tea.Cmd
+	if m.library.playlistsState.err != nil {
+		cmds = append(cmds, m.fetchPlaylists())
+	}
+	if m.library.albumsState.err != nil {
+		cmds = append(cmds, m.fetchAlbums())
+	}
+	if m.library.artistsState.err != nil {
+		cmds = append(cmds, m.fetchArtists())
+	}
+	return tea.Batch(cmds...)
+}
+
 func (m *Model) reloadLibrary() tea.Cmd {
 	m.setNote("Reloading library …")
 	return tea.Batch(m.fetchPlaylists(), m.fetchAlbums(), m.fetchArtists())
@@ -101,8 +117,11 @@ func (m *Model) reloadLibrary() tea.Cmd {
 
 // libraryErrText explains a failed library listing.
 func libraryErrText(err error) string {
-	if errors.Is(err, api.ErrLibraryUnavailable) {
+	switch {
+	case errors.Is(err, api.ErrLibraryUnavailable):
 		return "The daemon does not provide this listing; it needs a go-librespot build with the library endpoints."
+	case errors.Is(err, api.ErrNoSession):
+		return "Waiting for the daemon to log in to Spotify …"
 	}
 	return err.Error() + " — press ctrl+r to retry."
 }

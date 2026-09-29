@@ -97,3 +97,27 @@ func TestSessionClearsLoginState(t *testing.T) {
 		t.Fatalf("a session must clear the login state")
 	}
 }
+
+func TestLibraryReloadsOnceTheDaemonHasASession(t *testing.T) {
+	m := New(api.New("http://127.0.0.1:1"), Options{Cover: CoverOff})
+	m = update(m, tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = update(m, statusMsg{}) // reachable, no session yet
+	m = update(m, playlistsMsg{err: api.ErrNoSession})
+	m = update(m, albumsMsg{items: nil})
+
+	nm, cmd := m.Update(status(testCtx, 1))
+	m = nm.(Model)
+	if cmd == nil || !m.library.playlistsState.loading {
+		t.Fatalf("the failed playlists must load again once a session appears")
+	}
+	if m.library.albumsState.loading {
+		t.Fatalf("listings that loaded must not load again")
+	}
+
+	nm, _ = m.Update(status(testCtx, 2))
+	m = nm.(Model)
+	m.library.playlistsState.loading = false
+	if cmd := m.retryFailedLibrary(); cmd == nil {
+		t.Fatalf("retryFailedLibrary still sees the failed listing")
+	}
+}

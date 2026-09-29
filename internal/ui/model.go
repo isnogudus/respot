@@ -250,15 +250,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.reachable, m.connErr = false, msg.err
 			return m, nil
 		}
+		hadSession := m.status != nil
 		m.reachable, m.connErr = true, nil
 		m.status, m.statusAt = msg.st, time.Now()
 		if msg.st == nil {
 			return m, m.fetchLogin()
 		}
 		m.loginKnown, m.loginAuth = false, nil
+		var retry tea.Cmd
+		if !hadSession {
+			retry = m.retryFailedLibrary()
+		}
 		cmd := m.syncList()
 		m.followCursor(false)
-		return m, tea.Batch(cmd, m.fetchLiked(), m.fetchCovers())
+		return m, tea.Batch(cmd, m.fetchLiked(), m.fetchCovers(), retry)
 
 	case loginMsg:
 		if msg.err == nil && m.status == nil {
