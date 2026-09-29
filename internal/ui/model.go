@@ -113,6 +113,11 @@ type Model struct {
 
 	mode  inputMode
 	input textinput.Model
+
+	// Login state of a daemon without a Spotify session.
+	loginKnown bool
+	loginReady bool
+	loginAuth  *api.DeviceAuth
 }
 
 // Options configure the UI.
@@ -247,9 +252,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.reachable, m.connErr = true, nil
 		m.status, m.statusAt = msg.st, time.Now()
+		if msg.st == nil {
+			return m, m.fetchLogin()
+		}
+		m.loginKnown, m.loginAuth = false, nil
 		cmd := m.syncList()
 		m.followCursor(false)
 		return m, tea.Batch(cmd, m.fetchLiked(), m.fetchCovers())
+
+	case loginMsg:
+		if msg.err == nil && m.status == nil {
+			m.loginKnown, m.loginReady, m.loginAuth = true, msg.ready, msg.auth
+		}
+		return m, nil
 
 	case coverMsg:
 		return m.applyCover(msg), nil

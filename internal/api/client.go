@@ -199,6 +199,39 @@ func (c *Client) Status(ctx context.Context) (*Status, error) {
 	return &st, nil
 }
 
+// Ready reports whether the daemon is logged in and ready to play; it is not
+// while it is still logging in to Spotify.
+func (c *Client) Ready(ctx context.Context) (bool, error) {
+	var root struct {
+		PlaybackReady bool `json:"playback_ready"`
+	}
+	if _, err := c.do(ctx, http.MethodGet, "/", nil, &root); err != nil {
+		return false, err
+	}
+	return root.PlaybackReady, nil
+}
+
+// DeviceAuth is a pairing code the daemon waits on the user to approve.
+type DeviceAuth struct {
+	URL       string    `json:"url"`
+	Code      string    `json:"code"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// AuthCode returns the pairing code the daemon waits on, or nil when it waits
+// on none.
+func (c *Client) AuthCode(ctx context.Context) (*DeviceAuth, error) {
+	var auth DeviceAuth
+	code, err := c.do(ctx, http.MethodGet, "/auth/code", nil, &auth)
+	switch {
+	case code == http.StatusNotFound || code == http.StatusNoContent:
+		return nil, nil // older daemons lack the endpoint
+	case err != nil:
+		return nil, err
+	}
+	return &auth, nil
+}
+
 // ContextTracks lists the tracks of a context. It never blocks on the network
 // on the daemon side; poll until the result is Complete.
 func (c *Client) ContextTracks(ctx context.Context, uri string) (*ContextTracks, error) {

@@ -136,11 +136,10 @@ func (m Model) stateLines() []string {
 	case !m.loaded:
 		return []string{mutedStyle.Render("Connecting to " + m.client.Base() + " …")}
 	case !m.reachable:
-		return []string{errStyle.Render("Cannot reach go-librespot: " + fmt.Sprint(m.connErr)),
-			subtleStyle.Render("Retrying every few seconds.")}
+		headline, hint := connProblem(m.connErr)
+		return []string{errStyle.Render(headline + " at " + m.client.Base()), subtleStyle.Render(hint)}
 	case m.status == nil:
-		return []string{mutedStyle.Render("No active Spotify session."),
-			subtleStyle.Render("Select this device in a Spotify app to start.")}
+		return m.loginLines()
 	case m.status.Track == nil:
 		return []string{mutedStyle.Render("Nothing playing."), subtleStyle.Render("Pick something below and press enter.")}
 	}
