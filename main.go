@@ -9,8 +9,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/jmt/my-spotify-tui/internal/api"
-	"github.com/jmt/my-spotify-tui/internal/ui"
+	"github.com/isnogudus/respot/internal/api"
+	"github.com/isnogudus/respot/internal/ui"
 )
 
 func main() {

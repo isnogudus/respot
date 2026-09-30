@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/jmt/my-spotify-tui/internal/api"
+	"github.com/isnogudus/respot/internal/api"
 )
 
 const (
@@ -90,7 +90,7 @@ func (m Model) View() string {
 // renderPlayer is the device line and the player, with the cover beside it
 // when there is room, else two compact lines.
 func (m Model) renderPlayer(w int) []string {
-	left := boldAccent.Render(" ♫ go-librespot")
+	left := boldAccent.Render(" ♫ respot")
 	if st := m.status; st != nil {
 		left += mutedStyle.Render(fmt.Sprintf("  %s · %s", st.DeviceName, strings.ToLower(st.DeviceType)))
 	}

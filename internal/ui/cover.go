@@ -18,7 +18,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/ansi/iterm2"
 
-	"github.com/jmt/my-spotify-tui/internal/api"
+	"github.com/isnogudus/respot/internal/api"
 )
 
 // CoverMode selects how the album cover is drawn.

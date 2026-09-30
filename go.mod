@@ -1,6 +1,6 @@
-module github.com/jmt/my-spotify-tui
+module github.com/isnogudus/respot
 
-go 1.27.1
+go 1.24.2
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0

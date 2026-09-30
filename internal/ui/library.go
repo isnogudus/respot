@@ -6,7 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/jmt/my-spotify-tui/internal/api"
+	"github.com/isnogudus/respot/internal/api"
 )
 
 const likedSongsName = "Liked Songs"

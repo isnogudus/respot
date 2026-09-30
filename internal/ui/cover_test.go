@@ -15,7 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/jmt/my-spotify-tui/internal/api"
+	"github.com/isnogudus/respot/internal/api"
 )
 
 // quadrants is a 4×4 image: red top half, blue bottom half.

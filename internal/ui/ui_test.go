@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/jmt/my-spotify-tui/internal/api"
+	"github.com/isnogudus/respot/internal/api"
 )
 
 const (
