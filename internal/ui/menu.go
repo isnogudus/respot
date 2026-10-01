@@ -45,6 +45,11 @@ type libraryWriteMsg struct {
 	// likedURI is set when the write changed a track's liked state.
 	likedURI string
 	liked    bool
+
+	// changed is the context whose track listing the write changed.
+	changed string
+	// playlistsChanged is set when playlist lengths in the library changed.
+	playlistsChanged bool
 }
 
 // trackRef is a track an action menu acts on.
@@ -189,7 +194,7 @@ func (m Model) addToPlaylistCmd(t trackRef, playlistURI, name string) tea.Cmd {
 		if errors.Is(err, api.ErrLibraryWriteUnavailable) {
 			err = errors.New("the daemon cannot add to playlists; it needs the library write endpoints")
 		}
-		return libraryWriteMsg{note: "Added " + t.title + " to " + name, err: err}
+		return libraryWriteMsg{note: "Added " + t.title + " to " + name, err: err, changed: playlistURI, playlistsChanged: true}
 	}
 }
 

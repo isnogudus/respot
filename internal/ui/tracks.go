@@ -28,13 +28,14 @@ func (m Model) fetchList(uri string) tea.Cmd {
 	}
 }
 
-// syncList loads the top page's listing unless it is cached and complete.
+// syncList loads the top page's listing unless it is cached, complete and
+// unchanged.
 func (m *Model) syncList() tea.Cmd {
 	uri := m.listURI()
 	if uri == "" {
 		return nil
 	}
-	if ls := m.lists[uri]; ls != nil && ls.ct != nil && ls.ct.Complete() {
+	if ls := m.lists[uri]; ls != nil && ls.ct != nil && ls.ct.Complete() && !ls.stale {
 		return nil
 	}
 	if m.lists[uri] == nil {
@@ -54,14 +55,23 @@ func (m Model) applyList(msg listMsg) (tea.Model, tea.Cmd) {
 	} else {
 		ls.stalls = 0
 	}
-	ls.ct, ls.err = msg.ct, msg.err
+	switch {
+	case ls.stale && msg.err == nil && msg.ct != nil && !msg.ct.Ready && ls.ct != nil:
+		// The daemon is enumerating the changed context again: keep showing
+		// the old listing rather than an empty page until the new one is ready.
+	default:
+		ls.ct, ls.err = msg.ct, msg.err
+		if msg.ct != nil && msg.ct.Ready {
+			ls.stale = false
+		}
+	}
 	if msg.uri != m.listURI() {
 		return m, nil
 	}
 
 	m.followCursor(false)
 	cmd := m.fetchLiked()
-	if msg.ct != nil && !msg.ct.Complete() && ls.stalls < listMaxStalls {
+	if msg.ct != nil && (!msg.ct.Complete() || ls.stale) && ls.stalls < listMaxStalls {
 		uri := msg.uri
 		cmd = tea.Batch(cmd, tea.Tick(listPollInterval, func(time.Time) tea.Msg { return listPollMsg{uri: uri} }))
 	}
@@ -90,4 +100,18 @@ func (m *Model) followCursor(force bool) {
 			return
 		}
 	}
+}
+
+// listChanged marks the listing of uri as changed by a write: it is loaded
+// again now if a page shows it, else the next time one does.
+func (m *Model) listChanged(uri string) tea.Cmd {
+	ls := m.lists[uri]
+	if ls == nil {
+		return nil // never loaded, nothing to refresh
+	}
+	ls.stale, ls.stalls = true, 0
+	if m.listURI() != uri {
+		return nil
+	}
+	return m.fetchList(uri)
 }

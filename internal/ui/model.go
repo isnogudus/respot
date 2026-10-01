@@ -65,6 +65,9 @@ type listState struct {
 	ct     *api.ContextTracks
 	err    error
 	stalls int // polls in a row without newly resolved tracks
+	// stale is set when a write changed the context: the listing is shown
+	// until a new one is ready, and loaded again before it is shown next.
+	stale bool
 }
 
 // Model is the root UI model.
@@ -300,7 +303,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.likedURI != "" && m.liked != nil {
 			m.liked[msg.likedURI] = msg.liked
 		}
-		return m, nil
+		var cmds []tea.Cmd
+		if msg.changed != "" {
+			cmds = append(cmds, m.listChanged(msg.changed))
+		}
+		if msg.playlistsChanged {
+			cmds = append(cmds, m.fetchPlaylists())
+		}
+		return m, tea.Batch(cmds...)
 
 	case tea.KeyMsg:
 		switch {

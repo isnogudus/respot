@@ -102,7 +102,7 @@ func (m Model) toggleLiked() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) setLikedCmd(t trackRef, want bool) tea.Cmd {
-	c := m.client
+	c, likedURI := m.client, likedSongsURI(m.username())
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer cancel()
@@ -114,6 +114,6 @@ func (m Model) setLikedCmd(t trackRef, want bool) tea.Cmd {
 		if !want {
 			note = "Removed " + t.title + " from " + likedSongsName
 		}
-		return libraryWriteMsg{note: note, err: err, likedURI: t.uri, liked: want}
+		return libraryWriteMsg{note: note, err: err, likedURI: t.uri, liked: want, changed: likedURI}
 	}
 }
