@@ -114,7 +114,7 @@ go-librespot release (0.10.2) or still under review:
 | Go to album / artist | `album_uri`, `artist_uris` on tracks | merged ([#404](https://github.com/devgianlu/go-librespot/pull/404)), not released yet |
 | Liked Songs hearts, `f`, adding to playlists | `/library/liked`, `/library/playlists/add_tracks` | pull request [#403](https://github.com/devgianlu/go-librespot/pull/403) |
 | Albums and Artists pages | `/library/albums`, `/library/artists` | pull request [#405](https://github.com/devgianlu/go-librespot/pull/405) |
-| Removing from playlists, asking before duplicates | `/library/playlists/remove_track`, `/library/playlists/contains` | in preparation |
+| Removing from playlists, asking before duplicates | `/library/playlists/remove_track`, `/library/playlists/contains` | pull request [#411](https://github.com/devgianlu/go-librespot/pull/411) |
 
 Until then, build the daemon from go-librespot's `master` or from those pull
 requests' branches.
