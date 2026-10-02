@@ -27,6 +27,15 @@ var (
 	// ErrLikedUnavailable is returned when the daemon cannot tell which
 	// tracks are liked.
 	ErrLikedUnavailable = errors.New("liked state unavailable")
+	// ErrContainsUnavailable is returned when the daemon cannot tell whether
+	// a playlist holds a track.
+	ErrContainsUnavailable = errors.New("playlist membership unavailable")
+	// ErrNotInPlaylist is returned when a playlist does not hold the track to
+	// remove, or the daemon cannot remove from playlists.
+	ErrNotInPlaylist = errors.New("not in the playlist")
+	// ErrPlaylistChanged is returned when a playlist changed since it was
+	// listed, so the entry to remove is no longer where it was.
+	ErrPlaylistChanged = errors.New("the playlist changed")
 	// ErrNoSession is returned when the daemon has no active Spotify session.
 	ErrNoSession = errors.New("no active Spotify session")
 )
@@ -314,6 +323,48 @@ func (c *Client) Liked(ctx context.Context, uris []string) (map[string]bool, err
 // SetLiked saves uris to, or removes them from, Liked Songs.
 func (c *Client) SetLiked(ctx context.Context, uris []string, liked bool) error {
 	return c.libraryWrite(ctx, "/library/liked", map[string]any{"uris": uris, "liked": liked})
+}
+
+// PlaylistContains tells for each of uris whether the playlist holds it.
+func (c *Client) PlaylistContains(ctx context.Context, playlistURI string, uris []string) (map[string]bool, error) {
+	var states struct {
+		Items []struct {
+			URI       string `json:"uri"`
+			Contained bool   `json:"contained"`
+		} `json:"items"`
+	}
+	path := "/library/playlists/contains?playlist_uri=" + url.QueryEscape(playlistURI) + "&uris=" + url.QueryEscape(strings.Join(uris, ","))
+	code, err := c.do(ctx, http.MethodGet, path, nil, &states)
+	switch {
+	case code == http.StatusNotFound:
+		return nil, ErrContainsUnavailable
+	case err != nil:
+		return nil, err
+	case code == http.StatusNoContent:
+		return nil, ErrNoSession
+	}
+	out := make(map[string]bool, len(states.Items))
+	for _, s := range states.Items {
+		out[s.URI] = s.Contained
+	}
+	return out, nil
+}
+
+// RemoveFromPlaylist removes the entry of uri at position from a playlist.
+func (c *Client) RemoveFromPlaylist(ctx context.Context, playlistURI, uri string, position int) error {
+	code, err := c.do(ctx, http.MethodPost, "/library/playlists/remove_track",
+		map[string]any{"playlist_uri": playlistURI, "uri": uri, "position": position}, nil)
+	switch {
+	case code == http.StatusNotFound:
+		return ErrNotInPlaylist
+	case code == http.StatusConflict:
+		return ErrPlaylistChanged
+	case err != nil:
+		return err
+	case code == http.StatusNoContent:
+		return ErrNoSession
+	}
+	return nil
 }
 
 // AddToPlaylist appends uris to the end of a playlist.

@@ -79,7 +79,13 @@ func testTracks(uri string, n int) *api.ContextTracks {
 // newTestModel is playing track 1 of testCtx with a small library loaded.
 func newTestModel(t *testing.T) Model {
 	t.Helper()
-	m := New(api.New("http://127.0.0.1:1"), Options{Cover: CoverBlocks}) // refuses connections
+	return newTestModelWith(t, api.New("http://127.0.0.1:1")) // refuses connections
+}
+
+// newTestModelWith is newTestModel talking to client.
+func newTestModelWith(t *testing.T, client *api.Client) Model {
+	t.Helper()
+	m := New(client, Options{Cover: CoverBlocks})
 	m = update(m, tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = update(m, status(testCtx, 1))
 	m = update(m, playlistsMsg{items: []api.LibraryPlaylist{
@@ -290,12 +296,12 @@ func TestTrackMenu(t *testing.T) {
 	for _, it := range m.menu.items {
 		got = append(got, it.label)
 	}
-	want := []string{"Play", "Add to queue", "Add to " + likedSongsName, "Add to playlist", "Go to album · Album", "Go to artist · Band"}
+	want := []string{"Play", "Add to queue", "Add to " + likedSongsName, "Remove from Cool", "Add to playlist", "Go to album · Album", "Go to artist · Band"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("menu = %q, want %q", got, want)
 	}
 
-	m = press(m, "down", "down", "down", "right") // Add to playlist
+	m = press(m, "down", "down", "down", "down", "right") // Add to playlist
 	if m.menu == nil || m.menu.parent == nil {
 		t.Fatalf("Add to playlist must open a submenu")
 	}

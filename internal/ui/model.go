@@ -294,9 +294,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case likedMsg:
 		return m.applyLiked(msg)
 
+	case duplicateMsg:
+		return m.askAddAgain(msg), nil
+
 	case libraryWriteMsg:
 		if msg.err != nil {
 			m.setErr(msg.err)
+			if msg.changed != "" {
+				return m, m.listChanged(msg.changed)
+			}
 			return m, nil
 		}
 		m.setNote(msg.note)
@@ -385,6 +391,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.openAddMenu()
 	case "e":
 		return m.enqueueSelected()
+	case "x":
+		return m.removeSelected()
 	case "o":
 		return m.startInput(inputPlay)
 	case "a":

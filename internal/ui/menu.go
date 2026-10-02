@@ -61,10 +61,13 @@ type trackRef struct {
 	albumName  string
 	artistURIs []string
 	artists    []string
+	// position is the entry's index in contextURI's listing, -1 when the
+	// track does not come from a listed row.
+	position int
 }
 
 func refFromTrack(t *api.Track, uri, contextURI string) trackRef {
-	ref := trackRef{uri: uri, title: uri, contextURI: contextURI}
+	ref := trackRef{uri: uri, title: uri, contextURI: contextURI, position: -1}
 	if t != nil {
 		ref.title = t.Name + " — " + strings.Join(t.ArtistNames, ", ")
 		ref.albumURI, ref.albumName = t.AlbumURI, t.AlbumName
@@ -77,7 +80,7 @@ func refFromTrack(t *api.Track, uri, contextURI string) trackRef {
 // page, otherwise the playing track.
 func (m Model) addTarget() (trackRef, bool) {
 	if r, ok := m.selectedRow(); ok && r.kind == rowTrack {
-		return refFromTrack(r.track.Track, r.uri, m.listURI()), isAddable(r.uri)
+		return m.rowRef(r), isAddable(r.uri)
 	}
 	if m.status != nil && m.status.Track != nil {
 		return refFromTrack(m.status.Track, m.status.Track.URI, m.contextURI()), isAddable(m.status.Track.URI)
@@ -90,12 +93,19 @@ func isAddable(uri string) bool {
 }
 
 func (m Model) openTrackMenu(r row) (tea.Model, tea.Cmd) {
+	m.menu = m.trackMenu(m.rowRef(r))
+	return m, nil
+}
+
+// rowRef describes the track of a row, with its position in the listing.
+func (m Model) rowRef(r row) trackRef {
 	var t *api.Track
 	if r.track != nil {
 		t = r.track.Track
 	}
-	m.menu = m.trackMenu(refFromTrack(t, r.uri, m.listURI()))
-	return m, nil
+	ref := refFromTrack(t, r.uri, m.listURI())
+	ref.position = r.index
+	return ref
 }
 
 func (m Model) trackMenu(t trackRef) *menu {
@@ -118,6 +128,11 @@ func (m Model) trackMenu(t trackRef) *menu {
 		}
 		mn.items = append(mn.items, menuItem{icon: "♥", label: label, run: func(m Model) (Model, tea.Cmd) {
 			return m, m.setLikedCmd(t, !m.liked[t.uri])
+		}})
+	}
+	if name, ok := m.removable(t); ok {
+		mn.items = append(mn.items, menuItem{icon: "✕", label: "Remove from " + name, sub: true, run: func(m Model) (Model, tea.Cmd) {
+			return m.askRemove(t), nil
 		}})
 	}
 	mn.items = append(mn.items, menuItem{icon: "≡", label: "Add to playlist", sub: true, run: func(m Model) (Model, tea.Cmd) {
@@ -156,7 +171,7 @@ func (m Model) playlistMenu(t trackRef) *menu {
 			label = strings.Join(p.Folder, " › ") + " › " + p.Name
 		}
 		mn.items = append(mn.items, menuItem{icon: "≡", label: label, run: func(m Model) (Model, tea.Cmd) {
-			return m, m.addToPlaylistCmd(t, p.URI, p.Name)
+			return m, m.checkAndAddCmd(t, p.URI, p.Name)
 		}})
 	}
 	return mn

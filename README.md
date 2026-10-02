@@ -55,7 +55,9 @@ Start
 - **Enter** plays the row: a playlist, album or artist from its start, a track
   within the page's list.
 - **→ on a track** opens its actions: play, queue, add to or remove from Liked
-  Songs, add to a playlist, go to its album or artist.
+  Songs, add to a playlist, remove it from your playlist, go to its album or
+  artist. Adding a track a playlist already holds asks first, and so does
+  removing one.
 - **/** filters any page.
 
 The album cover is drawn as the real image in iTerm2 (its inline image
@@ -83,6 +85,7 @@ hides by itself in windows smaller than 60 × 20.
 | `f`                | add the selected (or playing) track to Liked Songs, or remove it when liked (♥) |
 | `A`                | add the selected (or playing) track to Liked Songs or a playlist |
 | `e`                | add the selected track to the queue            |
+| `x`                | remove the selected track from your playlist (asks first) |
 | `o` / `a`          | play / queue a Spotify URI or open.spotify.com link |
 | `ctrl+r`           | reload the library                             |
 | `i`                | show / hide the album cover                    |
@@ -111,6 +114,7 @@ go-librespot release (0.10.2) or still under review:
 | Go to album / artist | `album_uri`, `artist_uris` on tracks | merged ([#404](https://github.com/devgianlu/go-librespot/pull/404)), not released yet |
 | Liked Songs hearts, `f`, adding to playlists | `/library/liked`, `/library/playlists/add_tracks` | pull request [#403](https://github.com/devgianlu/go-librespot/pull/403) |
 | Albums and Artists pages | `/library/albums`, `/library/artists` | pull request [#405](https://github.com/devgianlu/go-librespot/pull/405) |
+| Removing from playlists, asking before duplicates | `/library/playlists/remove_track`, `/library/playlists/contains` | in preparation |
 
 Until then, build the daemon from go-librespot's `master` or from those pull
 requests' branches.
