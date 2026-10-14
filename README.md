@@ -104,20 +104,20 @@ metadata:
   enabled: true
 ```
 
-Some features need daemon endpoints that are newer than the latest
-go-librespot release (0.10.2) or still under review:
+Some features need daemon endpoints that newer go-librespot releases added,
+or that are still under review:
 
-| Feature | Needs | Status |
+| Feature | Needs | Available in |
 |---|---|---|
 | Player, controls, now playing list, cover | — | any recent release |
-| Playlists page | `GET /library/playlists` | merged ([#402](https://github.com/devgianlu/go-librespot/pull/402)), not released yet |
-| Go to album / artist | `album_uri`, `artist_uris` on tracks | merged ([#404](https://github.com/devgianlu/go-librespot/pull/404)), not released yet |
-| Liked Songs hearts, `f`, adding to playlists | `/library/liked`, `/library/playlists/add_tracks` | pull request [#403](https://github.com/devgianlu/go-librespot/pull/403) |
-| Albums and Artists pages | `/library/albums`, `/library/artists` | pull request [#405](https://github.com/devgianlu/go-librespot/pull/405) |
-| Removing from playlists, asking before duplicates | `/library/playlists/remove_track`, `/library/playlists/contains` | pull request [#411](https://github.com/devgianlu/go-librespot/pull/411) |
+| Playlists page | `GET /library/playlists` | 0.10.3 ([#402](https://github.com/devgianlu/go-librespot/pull/402)) |
+| Go to album / artist | `album_uri`, `artist_uris` on tracks | 0.10.3 ([#404](https://github.com/devgianlu/go-librespot/pull/404)) |
+| Liked Songs hearts, `f`, adding to playlists | `/library/liked`, `/library/playlists/add_tracks` | 0.10.3 ([#403](https://github.com/devgianlu/go-librespot/pull/403)) |
+| Removing from playlists, asking before duplicates | `/library/playlists/remove_track`, `/library/playlists/contains` | 0.10.4 ([#411](https://github.com/devgianlu/go-librespot/pull/411)) |
+| Albums and Artists pages | `/library/albums`, `/library/artists` | pull request [#405](https://github.com/devgianlu/go-librespot/pull/405), not merged yet |
 
-Until then, build the daemon from go-librespot's `master` or from those pull
-requests' branches.
+Until #405 is in a release, build the daemon from its branch to get the
+Albums and Artists pages; everything else works with 0.10.4.
 
 ## License
 
