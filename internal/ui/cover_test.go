@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/ansi/kitty"
 
 	"github.com/isnogudus/respot/internal/api"
 )
@@ -145,7 +147,7 @@ func TestCoverColsFollowCellAspect(t *testing.T) {
 }
 
 func TestParseCoverMode(t *testing.T) {
-	for in, want := range map[string]CoverMode{"auto": CoverAuto, "iterm2": CoverITerm2, "blocks": CoverBlocks, "off": CoverOff} {
+	for in, want := range map[string]CoverMode{"auto": CoverAuto, "iterm2": CoverITerm2, "kitty": CoverKitty, "blocks": CoverBlocks, "off": CoverOff} {
 		if got, err := ParseCoverMode(in); err != nil || got != want {
 			t.Errorf("ParseCoverMode(%q) = %v, %v", in, got, err)
 		}
@@ -156,8 +158,10 @@ func TestParseCoverMode(t *testing.T) {
 }
 
 func TestCoverAutoDetection(t *testing.T) {
+	for _, v := range []string{"TERM_PROGRAM", "TERM", "LC_TERMINAL", "KITTY_WINDOW_ID", "TMUX"} {
+		t.Setenv(v, "") // whatever terminal runs the tests
+	}
 	t.Setenv("TERM_PROGRAM", "iTerm.app")
-	t.Setenv("TMUX", "")
 	if got := CoverAuto.resolve(); got != CoverITerm2 {
 		t.Fatalf("iTerm2 outside tmux must draw images, got %v", got)
 	}
@@ -166,10 +170,101 @@ func TestCoverAutoDetection(t *testing.T) {
 		t.Fatalf("inside tmux the images would not pass through, got %v", got)
 	}
 	t.Setenv("TERM_PROGRAM", "Apple_Terminal")
-	t.Setenv("LC_TERMINAL", "")
 	t.Setenv("TMUX", "")
 	if got := CoverAuto.resolve(); got != CoverBlocks {
 		t.Fatalf("other terminals get blocks, got %v", got)
+	}
+
+	t.Setenv("TERM_PROGRAM", "ghostty")
+	t.Setenv("TERM", "xterm-ghostty")
+	if got := CoverAuto.resolve(); got != CoverKitty {
+		t.Fatalf("Ghostty must draw images with the kitty protocol, got %v", got)
+	}
+	t.Setenv("TERM_PROGRAM", "")
+	t.Setenv("TERM", "xterm-kitty")
+	if got := CoverAuto.resolve(); got != CoverKitty {
+		t.Fatalf("kitty must draw images with its protocol, got %v", got)
+	}
+	t.Setenv("TMUX", "/tmp/tmux-501/default,1,0")
+	if got := CoverAuto.resolve(); got != CoverBlocks {
+		t.Fatalf("inside tmux, where passthrough may be off, blocks are the safe default, got %v", got)
+	}
+}
+
+func TestKittyCover(t *testing.T) {
+	m := newTestModel(t)
+	m.coverMode = CoverKitty
+	m = playWithCover(t, m, serveCover(t))
+	cols := m.coverCols()
+
+	rows := m.coverCells()
+	if len(rows) != coverRows {
+		t.Fatalf("want %d rows, got %d", coverRows, len(rows))
+	}
+	for _, opt := range []string{"a=T", "U=1", "q=2", "i=1", "f=100", fmt.Sprintf("c=%d", cols), fmt.Sprintf("r=%d", coverRows)} {
+		if !strings.Contains(rows[0], opt) {
+			t.Fatalf("the first row must send the image as a virtual placement with %s: %q", opt, rows[0][:min(len(rows[0]), 120)])
+		}
+	}
+	for i, r := range rows {
+		if w := ansi.StringWidth(r); w != cols {
+			t.Fatalf("row %d is %d cells wide, want %d", i, w, cols)
+		}
+		if i > 0 && strings.Contains(r, "\x1b_G") {
+			t.Fatalf("only the first row may carry the image")
+		}
+	}
+
+	// The rows beside the image change every second; the image must not.
+	first := strings.Split(m.View(), "\n")[1]
+	m.statusAt = m.statusAt.Add(-5 * time.Second)
+	if again := strings.Split(m.View(), "\n")[1]; again != first {
+		t.Fatalf("the image row must stay the same while the track plays, so it is not resent")
+	}
+}
+
+func TestKittyPlaceholders(t *testing.T) {
+	rows := kittyPlaceholders(0x010203, 3, 2)
+	if !strings.HasPrefix(rows[0], "\x1b[38;2;1;2;3m") {
+		t.Fatalf("the image id is the foreground colour: %q", rows[0])
+	}
+	cell := string([]rune{kitty.Placeholder, kitty.Diacritic(1), kitty.Diacritic(2)})
+	if !strings.Contains(rows[1], cell) {
+		t.Fatalf("a cell names its row and column with diacritics: %q", rows[1])
+	}
+	if w := ansi.StringWidth(rows[1]); w != 3 {
+		t.Fatalf("a row of three cells is %d wide", w)
+	}
+}
+
+func TestKittyTransmitChunksAndTmux(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 640, 640))
+	rnd := rand.New(rand.NewPCG(1, 2))
+	for i := range img.Pix {
+		img.Pix[i] = byte(rnd.Uint32()) // noise, so the PNG needs several chunks
+	}
+	chunks := strings.Split(kittyTransmit(img, 10, 5, false), "\x1b_G")[1:]
+	if len(chunks) < 2 {
+		t.Fatalf("a large image must be sent in chunks, got %d", len(chunks))
+	}
+	if !strings.Contains(chunks[0], "m=1") || !strings.HasPrefix(chunks[len(chunks)-1], "q=2,m=0;") {
+		t.Fatalf("chunks must say whether more follow: first %q, last %q", chunks[0][:40], chunks[len(chunks)-1][:20])
+	}
+
+	wrapped := kittyTransmit(img, 10, 5, true)
+	if !strings.HasPrefix(wrapped, "\x1bPtmux;") || strings.Count(wrapped, "\x1bPtmux;") != len(chunks) {
+		t.Fatalf("in tmux every chunk must be passed through")
+	}
+}
+
+func TestShrink(t *testing.T) {
+	got := shrink(image.NewRGBA(image.Rect(0, 0, 640, 320)), 256).Bounds()
+	if got.Dx() != 256 || got.Dy() != 128 {
+		t.Fatalf("shrink = %v, want 256×128", got)
+	}
+	small := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	if shrink(small, 256) != image.Image(small) {
+		t.Fatalf("a small image is sent as is")
 	}
 }
 

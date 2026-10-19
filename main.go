@@ -19,7 +19,7 @@ func main() {
 		defAddr = "http://localhost:3678"
 	}
 	addr := flag.String("addr", defAddr, "go-librespot API base URL (env LIBRESPOT_ADDR)")
-	cover := flag.String("cover", "auto", "album cover: auto, iterm2, blocks or off")
+	cover := flag.String("cover", "auto", "album cover: auto, iterm2, kitty, blocks or off")
 	flag.Parse()
 
 	coverMode, err := ui.ParseCoverMode(*cover)

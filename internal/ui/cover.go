@@ -17,6 +17,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/ansi/iterm2"
+	"github.com/charmbracelet/x/ansi/kitty"
 
 	"github.com/isnogudus/respot/internal/api"
 )
@@ -25,10 +26,14 @@ import (
 type CoverMode int
 
 const (
-	// CoverAuto picks CoverITerm2 in iTerm2 outside tmux, else CoverBlocks.
+	// CoverAuto picks CoverITerm2 in iTerm2 and CoverKitty in Ghostty or
+	// kitty, both outside tmux, else CoverBlocks.
 	CoverAuto CoverMode = iota
 	// CoverITerm2 draws the cover image with iTerm2's inline image protocol.
 	CoverITerm2
+	// CoverKitty draws the cover image with the kitty graphics protocol's
+	// Unicode placeholders, as Ghostty and kitty support.
+	CoverKitty
 	// CoverBlocks draws the cover in coloured half blocks, in any terminal
 	// with 24-bit colour.
 	CoverBlocks
@@ -36,19 +41,21 @@ const (
 	CoverOff
 )
 
-// ParseCoverMode parses auto, iterm2, blocks or off.
+// ParseCoverMode parses auto, iterm2, kitty, blocks or off.
 func ParseCoverMode(s string) (CoverMode, error) {
 	switch s {
 	case "auto", "":
 		return CoverAuto, nil
 	case "iterm2":
 		return CoverITerm2, nil
+	case "kitty":
+		return CoverKitty, nil
 	case "blocks":
 		return CoverBlocks, nil
 	case "off":
 		return CoverOff, nil
 	}
-	return CoverAuto, fmt.Errorf("unknown cover mode %q (want auto, iterm2, blocks or off)", s)
+	return CoverAuto, fmt.Errorf("unknown cover mode %q (want auto, iterm2, kitty, blocks or off)", s)
 }
 
 // resolve turns CoverAuto into a concrete mode for this terminal.
@@ -56,9 +63,15 @@ func (c CoverMode) resolve() CoverMode {
 	if c != CoverAuto {
 		return c
 	}
-	iterm := os.Getenv("TERM_PROGRAM") == "iTerm.app" || os.Getenv("LC_TERMINAL") == "iTerm2"
-	if iterm && os.Getenv("TMUX") == "" {
+	if os.Getenv("TMUX") != "" {
+		return CoverBlocks
+	}
+	program, term := os.Getenv("TERM_PROGRAM"), os.Getenv("TERM")
+	switch {
+	case program == "iTerm.app" || os.Getenv("LC_TERMINAL") == "iTerm2":
 		return CoverITerm2
+	case program == "ghostty" || term == "xterm-ghostty" || term == "xterm-kitty" || os.Getenv("KITTY_WINDOW_ID") != "":
+		return CoverKitty
 	}
 	return CoverBlocks
 }
@@ -73,6 +86,12 @@ const (
 	coverCacheSize = 16
 	// coverMaxBytes bounds a downloaded cover.
 	coverMaxBytes = 4 << 20
+	// kittyImageID is the one image the kitty protocol shows: a new cover
+	// replaces it, so the terminal never holds more than one.
+	kittyImageID = 1
+	// kittyMaxPixels bounds the side of the image sent to the terminal; the
+	// cover is a few cells, so a full size cover would only cost bandwidth.
+	kittyMaxPixels = 256
 	// coverMinHeight and coverMinWidth hide the cover in smaller windows.
 	coverMinHeight = 20
 	coverMinWidth  = 60
@@ -86,6 +105,10 @@ type coverImage struct {
 	// blocks caches the half block rendering for blocksCols columns.
 	blocks     []string
 	blocksCols int
+
+	// kitty caches the kitty transmission for kittyCols columns.
+	kitty     string
+	kittyCols int
 }
 
 // coverMsg carries a downloaded cover.
@@ -216,6 +239,11 @@ func (m Model) applyCover(msg coverMsg) Model {
 
 // coverCells returns the cover's rows, each exactly coverCols cells wide.
 //
+// With kitty the first row also carries the image, sent once per cover and
+// width, and every row is placeholder text the terminal draws the image
+// over; Bubble Tea treats it as any other text. The transmission only
+// changes with the cover, so it is resent only then.
+//
 // With iTerm2 the first row carries the image: it clears the cell box and
 // draws the image into it, both with the cursor saved and restored, and every
 // row then skips the box with a cursor movement instead of writing into it.
@@ -227,6 +255,15 @@ func (m Model) coverCells() []string {
 	cover, ok := m.covers.get(coverURL(m.trackOrNil()))
 	if !ok {
 		return coverPlaceholder(cols)
+	}
+
+	if m.coverMode == CoverKitty {
+		if cover.kittyCols != cols {
+			cover.kitty, cover.kittyCols = kittyTransmit(cover.img, cols, coverRows, os.Getenv("TMUX") != ""), cols
+		}
+		rows := kittyPlaceholders(kittyImageID, cols, coverRows)
+		rows[0] = cover.kitty + rows[0]
+		return rows
 	}
 
 	if m.coverMode == CoverITerm2 {
@@ -266,6 +303,76 @@ func iterm2Image(data []byte, cols, rows int) string {
 	}))
 	sb.WriteString(ansi.RestoreCursor)
 	return sb.String()
+}
+
+// kittyTransmit sends img to the terminal as the kitty image kittyImageID,
+// with a virtual placement of cols × rows cells that kittyPlaceholders shows.
+// The terminal answers nothing (q=2), so no reply lands in respot's input.
+// In tmux every chunk is passed through to the outer terminal.
+func kittyTransmit(img image.Image, cols, rows int, tmux bool) string {
+	opts := &kitty.Options{
+		Action:           kitty.TransmitAndPut,
+		Quiet:            2,
+		ID:               kittyImageID,
+		Format:           kitty.PNG,
+		Transmission:     kitty.Direct,
+		Columns:          cols,
+		Rows:             rows,
+		VirtualPlacement: true,
+		Chunk:            true,
+	}
+	if tmux {
+		opts.ChunkFormatter = ansi.TmuxPassthrough
+	}
+	var sb strings.Builder
+	if err := kitty.EncodeGraphics(&sb, shrink(img, kittyMaxPixels), opts); err != nil {
+		return ""
+	}
+	return sb.String()
+}
+
+// kittyPlaceholders returns rows of cols cells that show the image with id
+// through its virtual placement: each cell is the placeholder character with
+// its row and column as diacritics, coloured with the image id.
+func kittyPlaceholders(id, cols, rows int) []string {
+	fg := fmt.Sprintf("\x1b[38;2;%d;%d;%dm", id>>16&0xff, id>>8&0xff, id&0xff)
+	lines := make([]string, rows)
+	for y := range rows {
+		var sb strings.Builder
+		sb.WriteString(fg)
+		for x := range cols {
+			sb.WriteRune(kitty.Placeholder)
+			sb.WriteRune(kitty.Diacritic(y))
+			sb.WriteRune(kitty.Diacritic(x))
+		}
+		sb.WriteString("\x1b[39m")
+		lines[y] = sb.String()
+	}
+	return lines
+}
+
+// shrink scales img down so that neither side exceeds limit pixels.
+func shrink(img image.Image, limit int) image.Image {
+	b := img.Bounds()
+	if b.Dx() <= limit && b.Dy() <= limit {
+		return img
+	}
+	w, h := limit, limit
+	if b.Dx() > b.Dy() {
+		h = max(1, b.Dy()*limit/b.Dx())
+	} else {
+		w = max(1, b.Dx()*limit/b.Dy())
+	}
+	px := downscale(img, w, h)
+	out := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := range h {
+		for x := range w {
+			p := px[y][x]
+			i := out.PixOffset(x, y)
+			out.Pix[i], out.Pix[i+1], out.Pix[i+2], out.Pix[i+3] = p.r, p.g, p.b, 0xff
+		}
+	}
+	return out
 }
 
 // rgb is an averaged pixel.

@@ -61,9 +61,10 @@ Start
 - **/** filters any page.
 
 The album cover is drawn as the real image in iTerm2 (its inline image
-protocol) and in coloured half blocks (`▀`) elsewhere and inside tmux.
-`-cover auto|iterm2|blocks|off` overrides the choice, `i` hides it, and it
-hides by itself in windows smaller than 60 × 20.
+protocol) and in Ghostty and kitty (the kitty graphics protocol's Unicode
+placeholders), and in coloured half blocks (`▀`) elsewhere and inside tmux.
+`-cover auto|iterm2|kitty|blocks|off` overrides the choice, `i` hides it,
+and it hides by itself in windows smaller than 60 × 20.
 
 ## Keys
 
