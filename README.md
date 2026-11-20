@@ -63,6 +63,13 @@ Start
   from your library, after asking. Like in Spotify, a deleted playlist stays
   for its followers and can be restored.
 - **/** filters any page.
+- **F** filters a track list by a playlist: without the tracks in it, or only
+  those also in it, as a page of its own — `Liked Songs › − Cool` lists your
+  liked tracks that Cool lacks. Filters chain, **←** takes one back, and **F**
+  on a filtered list adds all it shows to a playlist or queues them. Tracks are
+  compared by their Spotify uri, so the same recording from another album
+  counts as another track. Enter plays the whole list from the selected track,
+  not only what the filter shows.
 
 The album cover is drawn as the real image in iTerm2 (its inline image
 protocol) and in Ghostty and kitty (the kitty graphics protocol's Unicode
@@ -92,6 +99,7 @@ and it hides by itself in windows smaller than 60 × 20.
 | `e`                | add the selected track to the queue            |
 | `x`                | remove the selected track from your playlist, or delete the selected playlist (asks first) |
 | `N`                | create a playlist                              |
+| `F`                | filter the track list by a playlist; on a filtered one also add or queue all it shows |
 | `o` / `a`          | play / queue a Spotify URI or open.spotify.com link |
 | `ctrl+r`           | reload the library                             |
 | `i`                | show / hide the album cover                    |

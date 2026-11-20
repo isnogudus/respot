@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -28,20 +29,20 @@ func (m Model) fetchList(uri string) tea.Cmd {
 	}
 }
 
-// syncList loads the top page's listing unless it is cached, complete and
-// unchanged.
+// syncList loads the listings the top page shows or compares with, unless
+// they are cached with what the page needs and unchanged.
 func (m *Model) syncList() tea.Cmd {
-	uri := m.listURI()
-	if uri == "" {
-		return nil
+	var cmds []tea.Cmd
+	for _, uri := range m.pageLists() {
+		if m.listUsable(uri) {
+			continue
+		}
+		if m.lists[uri] == nil {
+			m.lists[uri] = &listState{}
+		}
+		cmds = append(cmds, m.fetchList(uri))
 	}
-	if ls := m.lists[uri]; ls != nil && ls.ct != nil && ls.ct.Complete() && !ls.stale {
-		return nil
-	}
-	if m.lists[uri] == nil {
-		m.lists[uri] = &listState{}
-	}
-	return m.fetchList(uri)
+	return tea.Batch(cmds...)
 }
 
 func (m Model) applyList(msg listMsg) (tea.Model, tea.Cmd) {
@@ -65,13 +66,13 @@ func (m Model) applyList(msg listMsg) (tea.Model, tea.Cmd) {
 			ls.stale = false
 		}
 	}
-	if msg.uri != m.listURI() {
+	if !slices.Contains(m.pageLists(), msg.uri) {
 		return m, nil
 	}
 
 	m.followCursor(false)
 	cmd := m.fetchLiked()
-	if msg.ct != nil && (!msg.ct.Complete() || ls.stale) && ls.stalls < listMaxStalls {
+	if msg.ct != nil && !m.listUsable(msg.uri) && ls.stalls < listMaxStalls {
 		uri := msg.uri
 		cmd = tea.Batch(cmd, tea.Tick(listPollInterval, func(time.Time) tea.Msg { return listPollMsg{uri: uri} }))
 	}
@@ -110,7 +111,7 @@ func (m *Model) listChanged(uri string) tea.Cmd {
 		return nil // never loaded, nothing to refresh
 	}
 	ls.stale, ls.stalls = true, 0
-	if m.listURI() != uri {
+	if !slices.Contains(m.pageLists(), uri) {
 		return nil
 	}
 	return m.fetchList(uri)

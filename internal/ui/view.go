@@ -297,6 +297,8 @@ func (m Model) renderBreadcrumb(w int) string {
 		info = fmt.Sprint(n)
 		if p.filter != "" {
 			info = fmt.Sprintf("%d of %d", len(m.rows()), n)
+		} else if len(p.sets) > 0 {
+			info = fmt.Sprintf("%d of %d", n, len(m.trackRowsAll()))
 		}
 	}
 	if p.filter != "" {
@@ -404,6 +406,15 @@ func (m Model) emptyText() string {
 		case ls.err != nil:
 			return ls.err.Error()
 		}
+		if op, waiting := m.pendingSet(p); waiting {
+			if ls := m.lists[op.uri]; ls != nil && ls.err != nil {
+				return op.name + ": " + ls.err.Error()
+			}
+			return "Loading " + op.name + " to compare with …"
+		}
+		if len(p.sets) > 0 && len(m.trackRowsAll()) > 0 {
+			return "No tracks are left — ← goes back."
+		}
 		return "No tracks."
 	}
 	return ""
@@ -465,6 +476,7 @@ func (m Model) renderHelp(w int) string {
 			{"e", "add selected track to the queue"},
 			{"x", "remove selected track from your playlist, or delete the selected playlist"},
 			{"N", "new playlist, at the top of your library"},
+			{"F", "filter the track list by a playlist: without its tracks, or only those also in it"},
 			{"o  a", "play / queue a Spotify URI or link"},
 		}},
 	}

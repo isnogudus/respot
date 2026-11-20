@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -286,7 +287,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.applyList(msg)
 
 	case listPollMsg:
-		if msg.uri == m.listURI() {
+		if slices.Contains(m.pageLists(), msg.uri) {
 			return m, m.fetchList(msg.uri)
 		}
 		return m, nil
@@ -404,6 +405,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.removeSelected()
 	case "N":
 		return m.startInput(inputNewPlaylist)
+	case "F":
+		return m.openSetMenu()
 	case "o":
 		return m.startInput(inputPlay)
 	case "a":

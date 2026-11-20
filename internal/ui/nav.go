@@ -34,6 +34,8 @@ type page struct {
 
 	cursor, offset int
 	filter         string
+	// sets narrow a track page by other listings, applied in order.
+	sets []setOp
 }
 
 // nowPlaying reports whether the page lists whatever plays now.
@@ -93,7 +95,8 @@ func (m Model) rowsOf(p *page) []row {
 	case pageArtists:
 		return m.artistRows()
 	case pageTracks:
-		return m.trackRows()
+		rows, _ := m.applySets(p, m.trackRowsAll())
+		return rows
 	}
 	return nil
 }
@@ -201,8 +204,9 @@ func orURI(name, uri string) string {
 	return uri
 }
 
-// trackRows lists the tracks of the top page's context.
-func (m Model) trackRows() []row {
+// trackRowsAll lists all tracks of the top page's context, before its set
+// operations narrow them.
+func (m Model) trackRowsAll() []row {
 	ls := m.lists[m.listURI()]
 	if ls == nil || ls.ct == nil {
 		return nil
