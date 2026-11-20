@@ -22,6 +22,8 @@ type fakeDaemon struct {
 	contained bool
 	noContain bool // answer /library/playlists/contains like an old daemon
 	removeErr int  // status for remove_track, 0 for OK
+	deleteErr int  // status for /library/playlists/remove, 0 for OK
+	createErr int  // status for /library/playlists/create, 0 for OK
 }
 
 func (f *fakeDaemon) client(t *testing.T) *api.Client {
@@ -47,6 +49,16 @@ func (f *fakeDaemon) client(t *testing.T) *api.Client {
 			if f.removeErr != 0 {
 				w.WriteHeader(f.removeErr)
 			}
+		case "/library/playlists/remove":
+			if f.deleteErr != 0 {
+				w.WriteHeader(f.deleteErr)
+			}
+		case "/library/playlists/create":
+			if f.createErr != 0 {
+				w.WriteHeader(f.createErr)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"uri": "spotify:playlist:new"})
 		default:
 			w.WriteHeader(http.StatusOK)
 		}
@@ -178,5 +190,163 @@ func TestRemoveOnlyFromOwnPlaylists(t *testing.T) {
 	m = update(m, key("x"))
 	if m.menu != nil || m.err == nil {
 		t.Fatalf("an album is not a playlist of yours: no question, an error")
+	}
+}
+
+// onPlaylist opens the Playlists page with the cursor on the playlist named
+// name; Cool is owned by the user, Theirs by someone else.
+func onPlaylist(t *testing.T, f *fakeDaemon, name string) Model {
+	t.Helper()
+	m := newTestModelWith(t, f.client(t))
+	m.library.playlists[0].OwnerUsername = testUsername
+	m.library.playlists[2].OwnerUsername = "someone"
+	m = press(m, "down", "down", "right") // Playlists: Cool, Party, Theirs
+	for i, r := range m.rows() {
+		if r.label == name {
+			m.page().cursor = i
+			return m
+		}
+	}
+	t.Fatalf("no playlist %q", name)
+	return m
+}
+
+func TestDeleteOwnPlaylistAsksFirst(t *testing.T) {
+	f := &fakeDaemon{}
+	m := onPlaylist(t, f, "Cool")
+	m = update(m, key("x"))
+	if m.menu == nil || m.menu.title != "Delete Cool?" {
+		t.Fatalf("x on an own playlist must ask to delete it, menu = %+v", m.menu)
+	}
+	if _, sent := f.asked("/library/playlists/remove"); sent {
+		t.Fatalf("nothing may be deleted before the answer")
+	}
+
+	nm, cmd := m.Update(key("enter")) // "Delete"
+	m = run(nm.(Model), cmd)
+	body, sent := f.asked("/library/playlists/remove")
+	if !sent || body["playlist_uri"] != testCtx {
+		t.Fatalf("delete must name the playlist, body = %v", body)
+	}
+	if m.note != "Deleted Cool" || !m.library.playlistsState.loading {
+		t.Fatalf("a deletion must say so and list the playlists again (note %q)", m.note)
+	}
+}
+
+func TestRemoveSomeoneElsesPlaylistFromTheLibrary(t *testing.T) {
+	f := &fakeDaemon{}
+	m := onPlaylist(t, f, "Theirs")
+	m = update(m, key("x"))
+	if m.menu == nil || m.menu.title != "Remove Theirs from your library?" {
+		t.Fatalf("x on a followed playlist must ask to remove it from the library, menu = %+v", m.menu)
+	}
+	nm, cmd := m.Update(key("enter"))
+	m = run(nm.(Model), cmd)
+	if m.note != "Removed Theirs from your library" {
+		t.Fatalf("note = %q", m.note)
+	}
+}
+
+func TestDeletePlaylistCancelled(t *testing.T) {
+	f := &fakeDaemon{}
+	m := onPlaylist(t, f, "Cool")
+	m = update(m, key("x"))
+	m = press(m, "down")
+	nm, cmd := m.Update(key("enter")) // "Cancel"
+	run(nm.(Model), cmd)
+	if _, sent := f.asked("/library/playlists/remove"); sent {
+		t.Fatalf("cancel must not delete")
+	}
+}
+
+func TestDeleteAPlaylistGoneOrOnAnOldDaemon(t *testing.T) {
+	f := &fakeDaemon{deleteErr: http.StatusNotFound}
+	m := onPlaylist(t, f, "Cool")
+	m = update(m, key("x"))
+	nm, cmd := m.Update(key("enter"))
+	m = run(nm.(Model), cmd)
+	if m.err == nil || !strings.Contains(m.err.Error(), "cannot delete playlists") || !m.library.playlistsState.loading {
+		t.Fatalf("a 404 must be explained and the playlists listed again, err = %v", m.err)
+	}
+}
+
+func TestOnlyPlaylistsAreDeleted(t *testing.T) {
+	f := &fakeDaemon{}
+	m := onPlaylist(t, f, "Party") // a folder
+	m = update(m, key("x"))
+	if m.menu != nil || m.err == nil {
+		t.Fatalf("a folder is not deleted: no question, an error")
+	}
+
+	m = newTestModelWith(t, f.client(t))
+	m = press(m, "down") // home: Liked Songs
+	m = update(m, key("x"))
+	if m.menu != nil {
+		t.Fatalf("Liked Songs on the home page is not deleted, menu = %q", m.menu.title)
+	}
+}
+
+func typeText(m Model, s string) Model {
+	return update(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)})
+}
+
+func TestCreatePlaylistLandsOnIt(t *testing.T) {
+	f := &fakeDaemon{}
+	m := onPlaylist(t, f, "Theirs")
+	m = update(m, key("N"))
+	if m.mode != inputNewPlaylist {
+		t.Fatalf("N must ask for the new playlist's name")
+	}
+	m = typeText(m, " Road Trip ")
+	nm, cmd := m.Update(key("enter"))
+	m = run(nm.(Model), cmd)
+
+	body, sent := f.asked("/library/playlists/create")
+	if !sent || body["name"] != "Road Trip" {
+		t.Fatalf("create must send the trimmed name, body = %v", body)
+	}
+	if m.note != "Created Road Trip" || !m.library.playlistsState.loading {
+		t.Fatalf("a creation must say so and list the playlists again (note %q)", m.note)
+	}
+
+	m = update(m, playlistsMsg{items: append([]api.LibraryPlaylist{{URI: "spotify:playlist:new", Name: "Road Trip"}}, m.library.playlists...)})
+	if r, _ := m.selectedRow(); r.uri != "spotify:playlist:new" {
+		t.Fatalf("the cursor must land on the new playlist, it is on %q", r.label)
+	}
+}
+
+func TestCreatePlaylistNeedsAName(t *testing.T) {
+	f := &fakeDaemon{}
+	m := onPlaylist(t, f, "Cool")
+	m = update(m, key("N"))
+	m = typeText(m, "   ")
+	nm, cmd := m.Update(key("enter"))
+	m = run(nm.(Model), cmd)
+	if _, sent := f.asked("/library/playlists/create"); sent || m.err == nil {
+		t.Fatalf("an empty name must be an error, not a request (err %v)", m.err)
+	}
+}
+
+func TestCreatePlaylistCancelled(t *testing.T) {
+	f := &fakeDaemon{}
+	m := onPlaylist(t, f, "Cool")
+	m = update(m, key("N"))
+	m = typeText(m, "Road Trip")
+	nm, cmd := m.Update(key("esc"))
+	m = run(nm.(Model), cmd)
+	if _, sent := f.asked("/library/playlists/create"); sent || m.mode != inputNone {
+		t.Fatalf("esc must cancel without creating")
+	}
+}
+
+func TestCreatePlaylistOnAnOldDaemon(t *testing.T) {
+	f := &fakeDaemon{createErr: http.StatusNotFound}
+	m := onPlaylist(t, f, "Cool")
+	m = update(m, key("N"))
+	m = typeText(m, "Road Trip")
+	nm, cmd := m.Update(key("enter"))
+	m = run(nm.(Model), cmd)
+	if m.err == nil || !strings.Contains(m.err.Error(), "cannot create playlists") {
+		t.Fatalf("a 404 must say the daemon cannot create playlists, err = %v", m.err)
 	}
 }

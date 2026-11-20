@@ -50,6 +50,8 @@ type libraryWriteMsg struct {
 	changed string
 	// playlistsChanged is set when playlist lengths in the library changed.
 	playlistsChanged bool
+	// created is a playlist the write created, for the cursor to land on.
+	created string
 }
 
 // trackRef is a track an action menu acts on.

@@ -58,6 +58,7 @@ const (
 	inputPlay
 	inputQueue
 	inputFilter
+	inputNewPlaylist
 )
 
 // listState is a loaded context track listing.
@@ -116,6 +117,10 @@ type Model struct {
 
 	mode  inputMode
 	input textinput.Model
+
+	// selectPlaylist is a playlist just created, for the cursor to land on
+	// once the playlists reload.
+	selectPlaylist string
 
 	// Login state of a daemon without a Spotify session.
 	loginKnown bool
@@ -288,6 +293,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playlistsMsg, albumsMsg, artistsMsg:
 		m.library.apply(msg)
+		if _, ok := msg.(playlistsMsg); ok && m.selectPlaylist != "" {
+			m.cursorToPlaylist(m.selectPlaylist)
+			m.selectPlaylist = ""
+		}
 		m.clampCursor()
 		return m, nil
 
@@ -300,14 +309,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case libraryWriteMsg:
 		if msg.err != nil {
 			m.setErr(msg.err)
-			if msg.changed != "" {
-				return m, m.listChanged(msg.changed)
+		} else {
+			m.setNote(msg.note)
+			if msg.likedURI != "" && m.liked != nil {
+				m.liked[msg.likedURI] = msg.liked
 			}
-			return m, nil
-		}
-		m.setNote(msg.note)
-		if msg.likedURI != "" && m.liked != nil {
-			m.liked[msg.likedURI] = msg.liked
 		}
 		var cmds []tea.Cmd
 		if msg.changed != "" {
@@ -315,6 +321,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.playlistsChanged {
 			cmds = append(cmds, m.fetchPlaylists())
+		}
+		if msg.created != "" {
+			m.selectPlaylist = msg.created
 		}
 		return m, tea.Batch(cmds...)
 
@@ -393,6 +402,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.enqueueSelected()
 	case "x":
 		return m.removeSelected()
+	case "N":
+		return m.startInput(inputNewPlaylist)
 	case "o":
 		return m.startInput(inputPlay)
 	case "a":
@@ -459,6 +470,9 @@ func (m Model) startInput(mode inputMode) (tea.Model, tea.Cmd) {
 		m.input.Placeholder = "filter this page"
 		m.input.SetValue(m.page().filter)
 		m.input.CursorEnd()
+	case inputNewPlaylist:
+		m.input.Prompt = "New playlist: "
+		m.input.Placeholder = "name"
 	}
 	return m, m.input.Focus()
 }
@@ -476,6 +490,9 @@ func (m Model) updateInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		mode := m.mode
 		m.mode = inputNone
 		m.input.Blur()
+		if mode == inputNewPlaylist {
+			return m.createPlaylist(m.input.Value())
+		}
 		uri, err := normalizeURI(m.input.Value())
 		if err != nil {
 			m.setErr(err)

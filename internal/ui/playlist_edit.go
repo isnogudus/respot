@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"errors"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -86,11 +87,55 @@ func (m Model) askRemove(t trackRef) Model {
 
 func (m Model) removeSelected() (tea.Model, tea.Cmd) {
 	r, ok := m.selectedRow()
-	if !ok || r.kind != rowTrack {
-		m.setErr(errors.New("select a track to remove"))
-		return m, nil
+	switch {
+	case ok && r.kind == rowTrack:
+		return m.askRemove(m.rowRef(r)), nil
+	case ok && m.page().kind == pagePlaylists && strings.HasPrefix(r.uri, "spotify:playlist:"):
+		return m.askRemovePlaylist(r.uri), nil
 	}
-	return m.askRemove(m.rowRef(r)), nil
+	m.setErr(errors.New("select a track or a playlist to remove"))
+	return m, nil
+}
+
+// askRemovePlaylist asks before taking a playlist out of the library. For
+// Spotify that deletes a playlist the user owns and unfollows anyone else's.
+func (m Model) askRemovePlaylist(uri string) Model {
+	var pl api.LibraryPlaylist
+	for _, p := range m.library.playlists {
+		if p.URI == uri {
+			pl = p
+		}
+	}
+	own := pl.OwnerUsername != "" && pl.OwnerUsername == m.username()
+	title, subtitle, label, done := "Remove "+pl.Name+" from your library?",
+		"Unfollows it; you can follow it again in Spotify.", "Remove", "Removed "+pl.Name+" from your library"
+	if own {
+		title, subtitle, label, done = "Delete "+pl.Name+"?",
+			"Its followers keep it, and Spotify can restore it.", "Delete", "Deleted "+pl.Name
+	}
+	m.menu = confirmMenu(title, subtitle,
+		menuItem{icon: "✕", label: label, run: func(m Model) (Model, tea.Cmd) {
+			return m, m.removePlaylistCmd(uri, pl.Name, done)
+		}})
+	return m
+}
+
+func (m Model) removePlaylistCmd(uri, name, done string) tea.Cmd {
+	c := m.client
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		defer cancel()
+		err := c.RemovePlaylist(ctx, uri)
+		switch {
+		case errors.Is(err, api.ErrPlaylistChanged):
+			return libraryWriteMsg{err: errors.New("your library changed meanwhile; reloaded, try again"), playlistsChanged: true}
+		case errors.Is(err, api.ErrNotInLibrary):
+			return libraryWriteMsg{err: errors.New(name + " is not in your library any more, or the daemon cannot delete playlists"), playlistsChanged: true}
+		case err != nil:
+			return libraryWriteMsg{err: err}
+		}
+		return libraryWriteMsg{note: done, playlistsChanged: true}
+	}
 }
 
 func (m Model) removeCmd(t trackRef, name string) tea.Cmd {
@@ -107,5 +152,45 @@ func (m Model) removeCmd(t trackRef, name string) tea.Cmd {
 			return libraryWriteMsg{err: err}
 		}
 		return libraryWriteMsg{note: "Removed " + t.title + " from " + name, changed: playlistURI, playlistsChanged: true}
+	}
+}
+
+// createPlaylist creates an empty playlist at the top of the library.
+func (m Model) createPlaylist(name string) (tea.Model, tea.Cmd) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		m.setErr(errors.New("a playlist needs a name"))
+		return m, nil
+	}
+	c := m.client
+	return m, func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		defer cancel()
+		uri, err := c.CreatePlaylist(ctx, name)
+		switch {
+		case errors.Is(err, api.ErrLibraryWriteUnavailable):
+			return libraryWriteMsg{err: errors.New("the daemon cannot create playlists")}
+		case errors.Is(err, api.ErrPlaylistChanged):
+			return libraryWriteMsg{err: errors.New("created " + name + ", but your library kept changing; add it in Spotify"), playlistsChanged: true}
+		case err != nil:
+			return libraryWriteMsg{err: err}
+		}
+		return libraryWriteMsg{note: "Created " + name, playlistsChanged: true, created: uri}
+	}
+}
+
+// cursorToPlaylist puts the cursor on a playlist when the playlists page it
+// sits on lists it.
+func (m *Model) cursorToPlaylist(uri string) {
+	if m.page().kind != pagePlaylists {
+		return
+	}
+	for i, r := range m.rows() {
+		if r.uri == uri {
+			p := m.page()
+			p.cursor = i
+			centerOn(i, &p.offset, m.listHeight())
+			return
+		}
 	}
 }

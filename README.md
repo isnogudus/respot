@@ -58,6 +58,10 @@ Start
   Songs, add to a playlist, remove it from your playlist, go to its album or
   artist. Adding a track a playlist already holds asks first, and so does
   removing one.
+- **N** creates a playlist, at the top of your library like in Spotify.
+- **x on a playlist** deletes it, or for someone else's playlist removes it
+  from your library, after asking. Like in Spotify, a deleted playlist stays
+  for its followers and can be restored.
 - **/** filters any page.
 
 The album cover is drawn as the real image in iTerm2 (its inline image
@@ -86,7 +90,8 @@ and it hides by itself in windows smaller than 60 × 20.
 | `f`                | add the selected (or playing) track to Liked Songs, or remove it when liked (♥) |
 | `A`                | add the selected (or playing) track to Liked Songs or a playlist |
 | `e`                | add the selected track to the queue            |
-| `x`                | remove the selected track from your playlist (asks first) |
+| `x`                | remove the selected track from your playlist, or delete the selected playlist (asks first) |
+| `N`                | create a playlist                              |
 | `o` / `a`          | play / queue a Spotify URI or open.spotify.com link |
 | `ctrl+r`           | reload the library                             |
 | `i`                | show / hide the album cover                    |
@@ -115,6 +120,7 @@ Some features need daemon endpoints that newer go-librespot releases added:
 | Liked Songs hearts, `f`, adding to playlists | `/library/liked`, `/library/playlists/add_tracks` | 0.10.3 ([#403](https://github.com/devgianlu/go-librespot/pull/403)) |
 | Removing from playlists, asking before duplicates | `/library/playlists/remove_track`, `/library/playlists/contains` | 0.10.4 ([#411](https://github.com/devgianlu/go-librespot/pull/411)) |
 | Albums and Artists pages | `/library/albums`, `/library/artists` | 0.10.6 ([#405](https://github.com/devgianlu/go-librespot/pull/405)) |
+| Creating and deleting playlists | `/library/playlists/create`, `/library/playlists/remove` | not in go-librespot yet |
 
 Prefer 0.10.7 or newer. Before it, respot cannot find the playing track in
 its list when Spotify plays it under another uri, as it does for tracks

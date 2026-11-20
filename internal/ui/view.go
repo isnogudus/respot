@@ -463,7 +463,8 @@ func (m Model) renderHelp(w int) string {
 			{"f", "add to / remove from Liked Songs"},
 			{"A", "add to Liked Songs or a playlist"},
 			{"e", "add selected track to the queue"},
-			{"x", "remove selected track from your playlist"},
+			{"x", "remove selected track from your playlist, or delete the selected playlist"},
+			{"N", "new playlist, at the top of your library"},
 			{"o  a", "play / queue a Spotify URI or link"},
 		}},
 	}

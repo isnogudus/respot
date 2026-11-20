@@ -36,6 +36,9 @@ var (
 	// ErrPlaylistChanged is returned when a playlist changed since it was
 	// listed, so the entry to remove is no longer where it was.
 	ErrPlaylistChanged = errors.New("the playlist changed")
+	// ErrNotInLibrary is returned when the playlist to remove is not in the
+	// user's library, or the daemon cannot remove playlists.
+	ErrNotInLibrary = errors.New("not in the library")
 	// ErrNoSession is returned when the daemon has no active Spotify session.
 	ErrNoSession = errors.New("no active Spotify session")
 )
@@ -357,6 +360,46 @@ func (c *Client) RemoveFromPlaylist(ctx context.Context, playlistURI, uri string
 	switch {
 	case code == http.StatusNotFound:
 		return ErrNotInPlaylist
+	case code == http.StatusConflict:
+		return ErrPlaylistChanged
+	case err != nil:
+		return err
+	case code == http.StatusNoContent:
+		return ErrNoSession
+	}
+	return nil
+}
+
+// CreatePlaylist creates an empty playlist named name at the top of the
+// user's library and returns its URI. ErrLibraryWriteUnavailable means the
+// daemon cannot create playlists; ErrPlaylistChanged that the playlist was
+// created but the library kept changing, so it is not in the library.
+func (c *Client) CreatePlaylist(ctx context.Context, name string) (string, error) {
+	var out struct {
+		URI string `json:"uri"`
+	}
+	code, err := c.do(ctx, http.MethodPost, "/library/playlists/create", map[string]any{"name": name}, &out)
+	switch {
+	case code == http.StatusNotFound:
+		return "", ErrLibraryWriteUnavailable
+	case code == http.StatusConflict:
+		return "", ErrPlaylistChanged
+	case err != nil:
+		return "", err
+	case code == http.StatusNoContent:
+		return "", ErrNoSession
+	}
+	return out.URI, nil
+}
+
+// RemovePlaylist takes a playlist out of the user's library: it deletes a
+// playlist the user owns and unfollows anyone else's. Spotify keeps the
+// playlist itself, for its followers and to be restored.
+func (c *Client) RemovePlaylist(ctx context.Context, playlistURI string) error {
+	code, err := c.do(ctx, http.MethodPost, "/library/playlists/remove", map[string]any{"playlist_uri": playlistURI}, nil)
+	switch {
+	case code == http.StatusNotFound:
+		return ErrNotInLibrary
 	case code == http.StatusConflict:
 		return ErrPlaylistChanged
 	case err != nil:
