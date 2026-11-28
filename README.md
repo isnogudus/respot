@@ -130,8 +130,8 @@ Some features need daemon endpoints that newer go-librespot releases added:
 | Liked Songs hearts, `f`, adding to playlists | `/library/liked`, `/library/playlists/add_tracks` | 0.10.3 ([#403](https://github.com/devgianlu/go-librespot/pull/403)) |
 | Removing from playlists, asking before duplicates | `/library/playlists/remove_track`, `/library/playlists/contains` | 0.10.4 ([#411](https://github.com/devgianlu/go-librespot/pull/411)) |
 | Albums and Artists pages | `/library/albums`, `/library/artists` | 0.10.6 ([#405](https://github.com/devgianlu/go-librespot/pull/405)) |
-| Creating and deleting playlists | `/library/playlists/create`, `/library/playlists/remove` | pending ([#450](https://github.com/devgianlu/go-librespot/pull/450)) |
-| Playing a filtered list with Enter | `/player/play` with `uris`, `/player/update_list` | not in go-librespot yet |
+| Creating and deleting playlists | `/library/playlists/create`, `/library/playlists/remove` | `master` ([#450](https://github.com/devgianlu/go-librespot/pull/450)), not released yet |
+| Playing a filtered list with Enter | `/player/play` with `uris`, `/player/update_list` | pull request [#454](https://github.com/devgianlu/go-librespot/pull/454), not merged yet |
 
 Prefer 0.10.7 or newer. Before it, respot cannot find the playing track in
 its list when Spotify plays it under another uri, as it does for tracks
