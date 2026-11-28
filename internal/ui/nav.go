@@ -129,7 +129,11 @@ func (m Model) homeRows() []row {
 		if name := m.contextName(); name != "" {
 			label += " · " + name
 		}
-		rows = append(rows, row{icon: "♪", label: label, uri: uri, open: &page{kind: pageTracks, title: "Now playing"}})
+		open := &page{kind: pageTracks, title: "Now playing"}
+		if p := m.playingList(); p != nil {
+			open.sets = slices.Clone(p.sets)
+		}
+		rows = append(rows, row{icon: "♪", label: label, uri: uri, open: open})
 	}
 	if u := m.username(); u != "" {
 		uri := likedSongsURI(u)
@@ -206,8 +210,11 @@ func orURI(name, uri string) string {
 
 // trackRowsAll lists all tracks of the top page's context, before its set
 // operations narrow them.
-func (m Model) trackRowsAll() []row {
-	ls := m.lists[m.listURI()]
+func (m Model) trackRowsAll() []row { return m.trackRowsOf(m.listURI()) }
+
+// trackRowsOf lists all tracks of a loaded context.
+func (m Model) trackRowsOf(uri string) []row {
+	ls := m.lists[uri]
 	if ls == nil || ls.ct == nil {
 		return nil
 	}
@@ -319,6 +326,8 @@ func (m Model) handlePageKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // page's context.
 func (m Model) playRow(r row) (tea.Model, tea.Cmd) {
 	switch {
+	case r.kind == rowTrack && len(m.page().sets) > 0:
+		return m.playSetRow(r)
 	case r.kind == rowTrack:
 		ctxURI, trackURI := m.listURI(), r.uri
 		m.followURI, m.navigated = trackURI, false // follow the track we start

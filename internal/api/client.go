@@ -24,6 +24,12 @@ var (
 	// ErrLibraryWriteUnavailable is returned when the daemon cannot write to
 	// Liked Songs or playlists.
 	ErrLibraryWriteUnavailable = errors.New("daemon cannot write to the library")
+	// ErrPlayListUnavailable is returned when the daemon cannot play a list
+	// of tracks without a context.
+	ErrPlayListUnavailable = errors.New("daemon cannot play a list of tracks")
+	// ErrNotPlayingList is returned when what plays is no list PlayList
+	// started.
+	ErrNotPlayingList = errors.New("no list plays")
 	// ErrLikedUnavailable is returned when the daemon cannot tell which
 	// tracks are liked.
 	ErrLikedUnavailable = errors.New("liked state unavailable")
@@ -439,6 +445,38 @@ func (c *Client) Play(ctx context.Context, uri, skipTo string) error {
 		body["skip_to_uri"] = skipTo
 	}
 	return c.post(ctx, "/player/play", body)
+}
+
+// MaxPlayURIs is how many tracks PlayList plays at most.
+const MaxPlayURIs = 10000
+
+// PlayList plays tracks in this order as a list of their own, starting at
+// skipTo when set. ErrPlayListUnavailable means the daemon cannot: one before
+// /player/play took uris answers 400.
+func (c *Client) PlayList(ctx context.Context, uris []string, skipTo string) error {
+	body := map[string]any{"uris": uris}
+	if skipTo != "" {
+		body["skip_to_uri"] = skipTo
+	}
+	code, err := c.do(ctx, http.MethodPost, "/player/play", body, nil)
+	if code == http.StatusBadRequest {
+		return ErrPlayListUnavailable
+	}
+	return err
+}
+
+// UpdateList replaces the tracks of the list PlayList started, while it
+// plays: the playing one keeps playing. ErrNotPlayingList means no such list
+// plays; ErrPlayListUnavailable that the daemon cannot update one.
+func (c *Client) UpdateList(ctx context.Context, uris []string) error {
+	code, err := c.do(ctx, http.MethodPost, "/player/update_list", map[string]any{"uris": uris}, nil)
+	switch code {
+	case http.StatusConflict:
+		return ErrNotPlayingList
+	case http.StatusNotFound:
+		return ErrPlayListUnavailable
+	}
+	return err
 }
 
 func (c *Client) AddToQueue(ctx context.Context, uri string) error {

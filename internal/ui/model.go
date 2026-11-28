@@ -119,6 +119,9 @@ type Model struct {
 	mode  inputMode
 	input textinput.Model
 
+	// played is a filtered page playing as a list, or nil.
+	played *playedList
+
 	// selectPlaylist is a playlist just created, for the cursor to land on
 	// once the playlists reload.
 	selectPlaylist string
@@ -198,7 +201,17 @@ func (m Model) position() int64 {
 	return max(0, min(pos, st.Track.Duration))
 }
 
+// contextURI is the playing context, or for a filtered list respot plays
+// the listing it filters.
 func (m Model) contextURI() string {
+	if p := m.playingList(); p != nil {
+		return p.uri
+	}
+	return m.statusContextURI()
+}
+
+// statusContextURI is the context the daemon reports playing.
+func (m Model) statusContextURI() string {
 	if m.status == nil || m.status.ContextURI == nil {
 		return ""
 	}
@@ -243,6 +256,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case EventMsg:
 		return m, m.fetchStatus()
 
+	case playListMsg:
+		return m.applyPlayList(msg)
+
+	case listUpdatedMsg:
+		return m.applyListUpdated(msg)
+
 	case actionMsg:
 		if msg.err != nil {
 			m.setErr(msg.err)
@@ -262,6 +281,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		hadSession := m.status != nil
 		m.reachable, m.connErr = true, nil
 		m.status, m.statusAt = msg.st, time.Now()
+		m.syncPlayed()
 		if msg.st == nil {
 			return m, m.fetchLogin()
 		}
@@ -287,7 +307,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.applyList(msg)
 
 	case listPollMsg:
-		if slices.Contains(m.pageLists(), msg.uri) {
+		if slices.Contains(m.watchedLists(), msg.uri) {
 			return m, m.fetchList(msg.uri)
 		}
 		return m, nil

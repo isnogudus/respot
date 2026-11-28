@@ -129,6 +129,9 @@ func libraryErrText(err error) string {
 // contextName names the playing context: the daemon's name for it, else the
 // name it has in the library. The daemon gives none for Liked Songs.
 func (m Model) contextName() string {
+	if p := m.playingList(); p != nil {
+		return m.listName(p)
+	}
 	if m.status != nil && m.status.ContextName != nil && *m.status.ContextName != "" {
 		return *m.status.ContextName
 	}

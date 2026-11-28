@@ -68,8 +68,10 @@ Start
   liked tracks that Cool lacks. Filters chain, **←** takes one back, and **F**
   on a filtered list adds all it shows to a playlist or queues them. Tracks are
   compared by their Spotify uri, so the same recording from another album
-  counts as another track. Enter plays the whole list from the selected track,
-  not only what the filter shows.
+  counts as another track. Enter plays what the filter shows from the selected
+  track, in order or shuffled (**s**), and Now playing lists it again. What
+  you change in respot carries over while it plays: a track you add to Cool
+  leaves the list, and the playing one plays to its end.
 
 The album cover is drawn as the real image in iTerm2 (its inline image
 protocol) and in Ghostty and kitty (the kitty graphics protocol's Unicode
@@ -129,6 +131,7 @@ Some features need daemon endpoints that newer go-librespot releases added:
 | Removing from playlists, asking before duplicates | `/library/playlists/remove_track`, `/library/playlists/contains` | 0.10.4 ([#411](https://github.com/devgianlu/go-librespot/pull/411)) |
 | Albums and Artists pages | `/library/albums`, `/library/artists` | 0.10.6 ([#405](https://github.com/devgianlu/go-librespot/pull/405)) |
 | Creating and deleting playlists | `/library/playlists/create`, `/library/playlists/remove` | pending ([#450](https://github.com/devgianlu/go-librespot/pull/450)) |
+| Playing a filtered list with Enter | `/player/play` with `uris`, `/player/update_list` | not in go-librespot yet |
 
 Prefer 0.10.7 or newer. Before it, respot cannot find the playing track in
 its list when Spotify plays it under another uri, as it does for tracks

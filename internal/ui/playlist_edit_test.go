@@ -24,6 +24,8 @@ type fakeDaemon struct {
 	removeErr int  // status for remove_track, 0 for OK
 	deleteErr int  // status for /library/playlists/remove, 0 for OK
 	createErr int  // status for /library/playlists/create, 0 for OK
+	playErr   int  // status for /player/play, 0 for OK
+	updateErr int  // status for /player/update_list, 0 for OK
 }
 
 func (f *fakeDaemon) client(t *testing.T) *api.Client {
@@ -59,6 +61,14 @@ func (f *fakeDaemon) client(t *testing.T) *api.Client {
 				return
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"uri": "spotify:playlist:new"})
+		case "/player/update_list":
+			if f.updateErr != 0 {
+				w.WriteHeader(f.updateErr)
+			}
+		case "/player/play":
+			if f.playErr != 0 {
+				w.WriteHeader(f.playErr)
+			}
 		default:
 			w.WriteHeader(http.StatusOK)
 		}

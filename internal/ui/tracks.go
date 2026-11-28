@@ -33,7 +33,7 @@ func (m Model) fetchList(uri string) tea.Cmd {
 // they are cached with what the page needs and unchanged.
 func (m *Model) syncList() tea.Cmd {
 	var cmds []tea.Cmd
-	for _, uri := range m.pageLists() {
+	for _, uri := range m.watchedLists() {
 		if m.listUsable(uri) {
 			continue
 		}
@@ -66,12 +66,12 @@ func (m Model) applyList(msg listMsg) (tea.Model, tea.Cmd) {
 			ls.stale = false
 		}
 	}
-	if !slices.Contains(m.pageLists(), msg.uri) {
+	if !slices.Contains(m.watchedLists(), msg.uri) {
 		return m, nil
 	}
 
 	m.followCursor(false)
-	cmd := m.fetchLiked()
+	cmd := tea.Batch(m.fetchLiked(), m.syncPlayingList())
 	if msg.ct != nil && !m.listUsable(msg.uri) && ls.stalls < listMaxStalls {
 		uri := msg.uri
 		cmd = tea.Batch(cmd, tea.Tick(listPollInterval, func(time.Time) tea.Msg { return listPollMsg{uri: uri} }))
@@ -111,7 +111,7 @@ func (m *Model) listChanged(uri string) tea.Cmd {
 		return nil // never loaded, nothing to refresh
 	}
 	ls.stale, ls.stalls = true, 0
-	if !slices.Contains(m.pageLists(), uri) {
+	if !slices.Contains(m.watchedLists(), uri) {
 		return nil
 	}
 	return m.fetchList(uri)

@@ -83,14 +83,15 @@ func (m Model) pageLists() []string {
 	return out
 }
 
-// listUsable reports whether the top page has what it needs of uri: the
-// listed context needs its tracks' metadata, a compared one just its uris.
+// listUsable reports whether the top page, or the filtered list playing, has
+// what it needs of uri: the listed context needs its tracks' metadata, a
+// compared one just its uris.
 func (m Model) listUsable(uri string) bool {
 	ls := m.lists[uri]
 	if ls == nil || ls.ct == nil || ls.stale {
 		return false
 	}
-	if uri == m.listURI() {
+	if uri == m.listURI() || (m.played != nil && uri == m.played.page.uri) {
 		return ls.ct.Complete()
 	}
 	return ls.ct.Ready
